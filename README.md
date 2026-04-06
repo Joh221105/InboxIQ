@@ -1,112 +1,206 @@
-# TECHIN 510 Final Project
+# InboxIQ 📬
+> AI-Powered Unified Email Management App
+
 ---
 
 ## Overview
+InboxIQ aggregates all your email accounts into one intelligent 
+dashboard. Users set their current "life context" — job hunting, 
+online shopping, school applications — and the AI automatically 
+triages every incoming email by urgency, extracts deadlines and 
+action items, and tracks package pickup codes.
 
-The final project simulates a professional client-developer relationship. You will:
-
-1. **Propose your own project** — define the problem, write the spec, create a revenue model, review all code, and accept (or reject) deliverables. You never write code on your own project.
-2. **Develop someone else's project** — architect the system, implement it using agentic engineering (AI-first development), write tests, and deliver a working product.
-
-All collaborations happen through GitHub — Issues, Pull Requests, and code review. 
----
-
-## Why This Model?
-
-**For Proposers (Client role):** A key part of software development is defining what to build, evaluating whether it was built correctly, and giving feedback that improves the product. These are the skills of a product manager, a startup founder, or anyone who hires engineers.
-
-**For Developers (Engineer role):** Real engineering means building to someone else's spec, not your own vision. You must interpret requirements, negotiate scope, communicate progress, and respond to feedback — all while using AI tools effectively.
+The problem: people who manage multiple inboxes miss critical 
+emails (interview invites, OA deadlines, pickup code expirations) 
+because they are buried under ads and promotions. InboxIQ solves 
+this by acting as an AI-powered filter that shows users only what 
+actually matters — in real time, across all their accounts.
 
 ---
 
-## The Two Roles
+## Revenue Model
+InboxIQ operates on a freemium SaaS model:
 
-### Role 1: Proposer (Client / Product Owner)
+| Tier | Price | Features |
+|------|-------|----------|
+| **Free** | $0/month | 1 connected inbox, basic AI triage, pickup tracker |
+| **Pro** | $8/month | Unlimited inboxes, full context modes, contact tagging, deadline extraction |
+| **Team** | $20/user/month | Shared inbox labels, admin dashboard, priority support |
 
-You are the client. You define what gets built and evaluate whether it meets your standards.
+**Additional revenue streams:**
+- Annual plan discount (20% off Pro) to improve retention
+- Enterprise licensing for organizations managing shared inboxes
 
-**Your responsibilities:**
-- Write a Project Pitch with a revenue model
-- Create a detailed `SPEC.md` with user stories and acceptance criteria
-- Decompose the spec into GitHub Issues with testable acceptance criteria
-- Set up branch protection on your project repo (main requires 1 review)
-- Review every Pull Request your developer submits
-- File bug reports with reproduction steps and screenshots
-- Conduct acceptance testing at each gate
-- Present the problem, revenue model, and development story at Demo Day
-
-**You never write implementation code on your own project.**
-
-### Role 2: Developer (AI-First Freelance Engineer)
-
-You are the engineer. You build someone else's vision using agentic engineering.
-
-**Your responsibilities:**
-- Browse project pitches and express interest
-- Write an `ARCHITECTURE.md` with C4 diagram, data model, tech stack justification, and agentic engineering plan
-- Set up `CLAUDE.md` and `.cursorrules` for effective AI-assisted development
-- Implement features via Pull Requests, each referencing a GitHub Issue
-- Use agentic engineering (Cursor, Claude Code) for all development
-- Write automated tests and conduct security review
-- Respond to all PR review comments and bug reports
-- Present architecture and agentic engineering approach at Demo Day
-
-**Your skill is not writing code by hand — it is orchestrating AI to produce quality code, then verifying the output.**
+**Market validation:** Gmail has 1.8B active users. Tools like 
+Superhuman ($30/month) demonstrate strong willingness to pay for 
+email productivity. InboxIQ targets a lower price point with 
+broader multi-account support as its primary differentiator.
 
 ---
 
-## GIX Bucks Economy
-
-Every project operates in a simulated economy that teaches budget management, scope-cost tradeoffs, and market validation.
-
-**See [`gix-bucks.md`](./gix-bucks.md) for full rules and worked examples.**
-
-Quick summary:
-- Every student starts with **100 GIX Bucks**
-- Proposers pay developers a **negotiated development fee**
-- At Demo Day, all students distribute their remaining bucks and those earned as developers as **investments** in projects they believe are viable
-- **Net Profit = Investment Received - Development Fee Paid**
-- Positive net profit is normalized to **bonus points**
-
----
-
-## Marketplace Matching
-
-If you are not hired by any client, or you cannot find a developer, let your instructor and TA know.
+## Core Features
+- 🔗 **Multi-inbox aggregation** — Connect Gmail & Outlook via OAuth
+- 🤖 **AI email triage** — Classify emails into 🔴 Action Required / 
+  🟡 Worth Reading / ⚪ Auto-Archive based on life context
+- ⏰ **Deadline extraction** — AI pulls due dates from email body 
+  and surfaces them as reminders
+- 📦 **Package tracker** — Auto-detect pickup codes, one-tap 
+  mark as used
+- 🏷️ **Contact tagging** — Flag professors, friends, and recruiters 
+  for instant highlight
+- 📊 **Daily digest dashboard** — Morning briefing of everything 
+  that needs attention today
 
 ---
 
 ## Tech Stack
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 14 + Tailwind CSS + shadcn/ui |
+| Backend | FastAPI (Python) |
+| AI | OpenAI GPT-4o |
+| Email APIs | Gmail API + Microsoft Graph API (OAuth 2.0) |
+| Database | PostgreSQL via Supabase |
+| Auth | Supabase Auth |
+| Deployment | Vercel (frontend) + Railway (backend) |
 
-The tech stack is **negotiated between proposer and developer**. Some examples are given below:
+---
 
-| Option | When to use |
-|--------|------------|
-| **Next.js + Supabase** | Multi-user apps, apps needing auth, database-heavy projects |
-| **Python + Streamlit** | Data-focused apps, single-user tools, rapid prototyping |
-| **Custom (pre-approved)** | Other stacks require written instructor approval by end of Week 3 |
-
-The proposer states their stack preference in the pitch. The developer may counter-propose with justification. The final choice is recorded in the `ARCHITECTURE.md`.
+## Team
+| Role | Name | Responsibilities |
+|------|------|-----------------|
+| Proposer (Client) | Ting Li | Spec, issue creation, PR review, acceptance testing, Demo Day pitch |
+| Developer | John Huang | Architecture, implementation, testing, PR submission |
+| Development Fee | 50 GIX Bucks | Paid on final delivery |
 
 ---
 
-## Conflict Resolution
-
-### Contract Terms
-
-The `SPEC.md` + agreed GIX Bucks fee constitute the project contract. Both parties should commit to:
-
-- **Proposer:** Review PRs within 48 hours. Provide specific, actionable feedback. Respond to developer questions within 48 hours.
-- **Developer:** Submit at least one PR per 2-week period. Respond to review comments within 48 hours. Keep the proposer informed of blockers.
-
-### Escalation Process
-
-1. If either party is unresponsive or breaches the contract, the other creates a GitHub Issue tagged `escalation` in the project repo.
-2. Instructor reviews the GitHub audit trail (PR timestamps, Issue activity, review comments) within 1 week.
-3. Instructor mediates and documents the outcome.
-
-### Grade Impact
-
-- **Communication & Professionalism** are graded. Ghosting, persistent non-responsiveness may result in point deduction. 
+## Repository Structure
+```
+inboxiq/
+├── frontend/          # Next.js app
+├── backend/           # FastAPI app
+├── SPEC.md            # Full project specification
+├── ARCHITECTURE.md    # Developer's architecture document (by John Huang)
+├── CLAUDE.md          # AI-assisted development config
+├── .cursorrules       # Cursor rules for agentic engineering
+└── README.md          # This file
+```
 
 ---
+
+## Branch Protection Rules
+- `main` branch requires **at least 1 approving review** before merge
+- All features must be submitted via Pull Request referencing a GitHub Issue
+- Direct pushes to `main` are disabled
+- Developer must respond to all review comments within **48 hours**
+- Proposer must review all PRs within **48 hours**
+
+---
+
+## Development Timeline (2 Weeks)
+
+| Milestone | Deadline | Required Progress | Acceptance Gate |
+|-----------|----------|-------------------|-----------------|
+| ✅ **Check-in 1** | End of Week 1, Day 3 | OAuth login working for Gmail; emails fetched and stored in DB; project deployed to staging URL; ARCHITECTURE.md submitted | Proposer reviews Architecture PR within 48 hours |
+| ✅ **Check-in 2** | End of Week 1, Day 6 | AI triage pipeline working (3-category classification + summary); context mode switcher functional; unified inbox page live on staging | Proposer conducts acceptance test on inbox triage accuracy |
+| ✅ **Check-in 3** | End of Week 2, Day 3 | Package tracker complete with auto-detection and mark-as-used; deadline extraction working; contact tagging functional; all MVP issues closed | Proposer files bug reports; developer resolves within 48 hours |
+| 🏁 **Final Delivery** | End of Week 2 | All MVP features polished and deployed to production URL; README updated; tests passing; demo-ready | Final acceptance test by proposer; GIX Bucks paid on approval |
+
+---
+
+## GitHub Issues
+The full project is decomposed into the following issues. 
+Each PR must reference its corresponding issue.
+
+| # | Issue | Epic |
+|---|-------|------|
+| 1 | Project Setup & Repo Scaffolding | `setup` |
+| 2 | Database Schema & Supabase Auth | `setup` |
+| 3 | Gmail OAuth & Email Sync Pipeline | `auth` |
+| 4 | AI Triage Pipeline (classify + summarize + extract) | `ai` |
+| 5 | Unified Inbox Page | `inbox` |
+| 6 | Dashboard & Daily Digest | `dashboard` |
+| 7 | Package Tracker Page | `tracker` |
+| 8 | Contact Tags & Settings Pages | `contacts` |
+
+---
+
+## Acceptance Criteria Summary
+Each issue has its own detailed acceptance criteria. 
+High-level gates for final delivery:
+
+- [ ] User can connect at least 1 Gmail account via OAuth
+- [ ] All emails displayed in unified inbox with triage badges
+- [ ] Switching context mode visibly changes triage results
+- [ ] AI summary visible on every email card
+- [ ] At least 1 deadline correctly extracted from a real email
+- [ ] Pickup code auto-detected from a real Amazon/FedEx email
+- [ ] Mark as Used archives the source email
+- [ ] Contact tag visually highlights emails from tagged sender
+- [ ] Daily digest shows on dashboard home
+- [ ] App deployed to public production URL
+- [ ] No critical bugs open at time of final delivery
+
+---
+
+## Contract Terms
+Per course requirements, both parties commit to:
+
+**Proposer (Ting Li):**
+- Review all PRs within 48 hours
+- Provide specific, actionable written feedback on every review
+- Respond to developer questions within 48 hours
+- File bug reports with reproduction steps and screenshots
+
+**Developer (John Huang):**
+- Submit at least one PR per 2-week period
+- Respond to all review comments within 48 hours
+- Keep proposer informed of any blockers immediately
+- Use agentic engineering tools (Cursor / Claude Code) for all implementation
+
+Disputes are resolved by creating a GitHub Issue tagged 
+`escalation` for instructor review.
+
+---
+
+## Demo Day
+**Proposer presents:**
+- The problem and target user
+- Revenue model and market opportunity
+- Development story: what was built, what feedback was given, 
+  what changed through the process
+
+**Developer presents:**
+- System architecture (C4 diagram from ARCHITECTURE.md)
+- Agentic engineering approach and AI tooling used
+- Key technical decisions and tradeoffs
+
+---
+
+## Getting Started (for Developer)
+```bash
+# Clone the repo
+git clone https://github.com/[your-username]/inboxiq.git
+
+# Frontend setup
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+
+# Backend setup
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload
+```
+
+**Required environment variables:**
+```
+OPENAI_API_KEY=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+```
