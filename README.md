@@ -109,12 +109,35 @@ inboxiq/
 
 ## Development Timeline (2 Weeks)
 
-| Milestone             | Deadline             | Required Progress                                                                                                                             | Acceptance Gate                                                |
-| --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| ✅ **Check-in 1**     | End of Week 1, Day 3 | OAuth login working for Gmail; emails fetched and stored in DB; project deployed to staging URL; ARCHITECTURE.md submitted                    | Proposer reviews Architecture PR within 48 hours               |
-| ✅ **Check-in 2**     | End of Week 1, Day 6 | AI triage pipeline working (3-category classification + summary); context mode switcher functional; unified inbox page live on staging        | Proposer conducts acceptance test on inbox triage accuracy     |
-| ✅ **Check-in 3**     | End of Week 2, Day 3 | Package tracker complete with auto-detection and mark-as-used; deadline extraction working; contact tagging functional; all MVP issues closed | Proposer files bug reports; developer resolves within 48 hours |
-| 🏁 **Final Delivery** | End of Week 2        | All MVP features polished and deployed to production URL; README updated; tests passing; demo-ready                                           | Final acceptance test by proposer; GIX Bucks paid on approval  |
+> **Mid-point check completed: May 4, 2026.**
+> Developer is **behind schedule**. Check-ins 2 and 3 are not met. See bug issues #12–#17 for detailed findings.
+
+| Milestone             | Deadline             | Status | Required Progress                                                                                                                             | Acceptance Gate                                                | Notes |
+| --------------------- | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----- |
+| ✅ **Check-in 1**     | End of Week 1, Day 3 | **Partial** | OAuth login working for Gmail; emails fetched and stored in DB; project deployed to staging URL; ARCHITECTURE.md submitted | Proposer reviews Architecture PR within 48 hours | ARCHITECTURE.md merged (PR #2). Gmail OAuth merged late (PR #11, May 2). Emails are **not stored in DB** — fetched live only. No staging deployment confirmed. |
+| ❌ **Check-in 2**     | End of Week 1, Day 6 | **Not met** | AI triage pipeline working (3-category classification + summary); context mode switcher functional; unified inbox page live on staging | Proposer conducts acceptance test on inbox triage accuracy | No AI triage exists. No context switcher. No `/inbox` page. OpenAI not integrated. See bugs [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12), [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13), [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14). |
+| ❌ **Check-in 3**     | End of Week 2, Day 3 | **Not met** | Package tracker complete with auto-detection and mark-as-used; deadline extraction working; contact tagging functional; all MVP issues closed | Proposer files bug reports; developer resolves within 48 hours | Package tracker missing (bug [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15)). Dashboard missing (bug [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16)). DB schema incomplete (bug [#17](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/17)). Issues #4–#10 all still open. |
+| 🏁 **Final Delivery** | End of Week 2        | **At risk** | All MVP features polished and deployed to production URL; README updated; tests passing; demo-ready                                           | Final acceptance test by proposer; GIX Bucks paid on approval  | 6 blocker bugs filed (issues #12–#17). Developer must resolve all blockers and complete open issues #4–#10 to qualify for final payment. |
+
+### Mid-Point Assessment (May 4, 2026)
+
+**What is working:**
+- Supabase magic-link authentication (`/login`)
+- Gmail OAuth 2.0 flow (connect account, token stored in `connected_accounts`)
+- Basic email metadata fetch (subject, sender, snippet — up to 15 messages)
+
+**What is missing (all blockers):**
+
+| Bug | Issue | Severity |
+| --- | ----- | -------- |
+| [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12) AI triage badges and summaries absent | #5 | Blocker |
+| [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13) Context mode switcher absent | #5 | Blocker |
+| [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14) Email body not fetched; no OpenAI client | #5 #6 #8 | Blocker |
+| [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15) Package tracker page missing | #8 | Blocker |
+| [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16) Dashboard home page missing | #9 | Blocker |
+| [#17](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/17) `emails` and `contact_tags` DB tables not created | #4–#8 | Blocker |
+
+All 6 bugs must be resolved within 48 hours per contract terms.
 
 ---
 
@@ -141,17 +164,17 @@ Each PR must reference its corresponding issue.
 Each issue has its own detailed acceptance criteria.
 High-level gates for final delivery:
 
-- [ ] User can connect at least 1 Gmail account via OAuth
-- [ ] All emails displayed in unified inbox with triage badges
-- [ ] Switching context mode visibly changes triage results
-- [ ] AI summary visible on every email card
-- [ ] At least 1 deadline correctly extracted from a real email
-- [ ] Pickup code auto-detected from a real Amazon/FedEx email
-- [ ] Mark as Used archives the source email
-- [ ] Contact tag visually highlights emails from tagged sender
-- [ ] Daily digest shows on dashboard home
-- [ ] App deployed to public production URL
-- [ ] No critical bugs open at time of final delivery
+- [x] User can connect at least 1 Gmail account via OAuth ✅ working
+- [ ] All emails displayed in unified inbox with triage badges ❌ bug [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12)
+- [ ] Switching context mode visibly changes triage results ❌ bug [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13)
+- [ ] AI summary visible on every email card ❌ bug [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12), [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14)
+- [ ] At least 1 deadline correctly extracted from a real email ❌ not implemented
+- [ ] Pickup code auto-detected from a real Amazon/FedEx email ❌ bug [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15)
+- [ ] Mark as Used archives the source email ❌ not implemented
+- [ ] Contact tag visually highlights emails from tagged sender ❌ not implemented
+- [ ] Daily digest shows on dashboard home ❌ bug [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16)
+- [ ] App deployed to public production URL ❌ issue [#10](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/10) open
+- [ ] No critical bugs open at time of final delivery ❌ 6 blockers filed (issues #12–#17)
 
 ---
 
