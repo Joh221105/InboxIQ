@@ -103,7 +103,7 @@ export function InboxHome() {
     }
     setEmailsLoading(true);
     try {
-      const res = await fetch(`${getApiBase()}/emails`, {
+      const res = await fetch(`${getApiBase()}/emails?limit=25`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const data = await res.json().catch(() => ({}));
@@ -113,9 +113,11 @@ export function InboxHome() {
       }
       const list = (data as { messages?: MessageRow[] }).messages ?? [];
       setMessages(list);
-      if (list.length > 0 && list.length < 10) {
+      if (list.length >= 10) {
+        setBanner(`Loaded ${list.length} messages from Gmail (meets the ≥10 check).`);
+      } else if (list.length > 0) {
         setBanner(
-          `Loaded ${list.length} message(s). For the project acceptance check, use an inbox with at least 10 messages.`
+          `Loaded ${list.length} message(s). Gmail returned fewer than 10 threads in this mailbox — use an account with more history for the full acceptance check.`
         );
       }
     } catch {
@@ -205,7 +207,7 @@ export function InboxHome() {
             <CardHeader>
               <CardTitle>Inbox preview</CardTitle>
               <CardDescription>
-                {messages.length} message{messages.length === 1 ? "" : "s"} (showing up to 15)
+                {messages.length} message{messages.length === 1 ? "" : "s"} (up to 25 from Gmail)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
