@@ -22,9 +22,10 @@ WHERE user_id = '<user_b_id>';
 SELECT * FROM public.contact_tags
 WHERE user_id = '<user_b_id>';
 
--- 5. Cannot read another user's oauth token (via connected_accounts)
-SELECT oauth_token FROM public.connected_accounts
-WHERE user_id = '<user_b_id>';
+-- 5. Cannot insert a contact tag on behalf of another user
+INSERT INTO public.contact_tags (user_id, email, tag)
+VALUES ('<user_b_id>', 'victim@example.com', 'injected-tag')
+RETURNING id;
 
 -- 6. Cannot update another user's profile
 UPDATE public.users
