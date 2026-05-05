@@ -1,9 +1,9 @@
+import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
 
 const PROTECTED_ROUTES = ["/", "/inbox", "/packages", "/contacts", "/settings"];
 
-export async function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   const isProtected = PROTECTED_ROUTES.some(
@@ -14,21 +14,41 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = await updateSession(request);
+  let supabaseResponse = NextResponse.next({ request });
 
-  // If updateSession set a redirect to /auth/* we should pass it through.
-  // Otherwise check if session cookie is present; if not, redirect to sign-in.
-  const sessionCookie =
-    request.cookies.get("sb-access-token") ??
-    request.cookies.get("supabase-auth-token");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!sessionCookie) {
+  if (!url || !key) {
+    return supabaseResponse;
+  }
+
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options),
+        );
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     const signInUrl = request.nextUrl.clone();
     signInUrl.pathname = "/auth/sign-in";
     return NextResponse.redirect(signInUrl);
   }
 
-  return response;
+  return supabaseResponse;
 }
 
 export const config = {
