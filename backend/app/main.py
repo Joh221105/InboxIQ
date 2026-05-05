@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import httpx
 from fastapi import FastAPI
@@ -56,24 +56,16 @@ async def _probe_supabase() -> str:
                 f"{settings.supabase_url.rstrip('/')}/auth/v1/health"
             )
             return "ok" if resp.status_code == 200 else "down"
-    except Exception:
+    except httpx.HTTPError:
         return "down"
 
 
 async def _probe_openai() -> str:
-    try:
-        async with httpx.AsyncClient(timeout=1.0) as client:
-            resp = await client.get(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-            )
-            return "ok" if resp.status_code == 200 else "down"
-    except Exception:
-        return "down"
+    return "ok" if bool(settings.openai_api_key) else "not_configured"
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, Any]:
     supabase_status, openai_status = await asyncio.gather(
         _probe_supabase(), _probe_openai()
     )

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.core.auth import UserClaims, get_current_user
@@ -37,6 +38,7 @@ def authed_client() -> TestClient:
 def unauthed_client() -> TestClient:
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.clear()
 
 
 # --- GET /users/me ---
@@ -85,3 +87,19 @@ def test_patch_context_invalid_value(authed_client: TestClient) -> None:
         "/users/me/context", json={"context": "Invalid Context"}
     )
     assert resp.status_code == 422
+
+
+def test_patch_context_no_token(unauthed_client: TestClient) -> None:
+    resp = unauthed_client.patch(
+        "/users/me/context", json={"context": "Daily"}
+    )
+    assert resp.status_code == 401
+
+
+def test_get_me_not_found(authed_client: TestClient) -> None:
+    with patch(
+        "app.routers.users.get_user",
+        new=AsyncMock(side_effect=HTTPException(status_code=404, detail="not found")),
+    ):
+        resp = authed_client.get("/users/me")
+    assert resp.status_code == 404
