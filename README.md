@@ -288,3 +288,15 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_API_URL=
 ```
+
+### Migrations
+
+The SQL migrations live in `backend/supabase/migrations/`. To print all migrations in order (useful for pasting into Supabase SQL Editor):
+
+```bash
+make migrations
+# or directly:
+python backend/scripts/print_migrations.py
+```
+
+To apply migrations, paste the output into the **Supabase SQL Editor** for your project, or run it against your local Postgres instance.
