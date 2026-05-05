@@ -19,7 +19,7 @@ async def get_user(user_id: UUID) -> User:
             .maybe_single()
             .execute()
         )
-        return result.data  # type: ignore[return-value]
+        return result.data if result is not None else None  # type: ignore[return-value]
 
     data = await asyncio.to_thread(_fetch)
     if not data:

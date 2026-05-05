@@ -38,4 +38,4 @@ class Settings(BaseSettings):
         return list({self.frontend_url.rstrip("/"), "http://localhost:3000"})
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]
