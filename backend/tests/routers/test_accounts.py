@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.auth import UserClaims, get_current_user
 from app.main import app
+from app.models.connected_account import ConnectedAccount, OAuthTokens
 
 _USER_ID = uuid4()
 _EMAIL = "owner@example.com"
@@ -34,20 +35,24 @@ def anon_client() -> TestClient:
     app.dependency_overrides.clear()
 
 
-def _make_account(user_id: UUID, account_id: UUID | None = None) -> MagicMock:
-    a = MagicMock()
-    a.id = account_id or uuid4()
-    a.user_id = user_id
-    a.email_address = "work@gmail.com"
-    a.provider = "gmail"
-    a.color = "#4F46E5"
-    a.last_synced = None
-    a.disconnected_at = None
-    a.disconnected_reason = None
-    a.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
-    a.oauth_token = MagicMock()
-    a.oauth_token.refresh_token = "ref_tok"
-    return a
+def _make_account(user_id: UUID, account_id: UUID | None = None) -> ConnectedAccount:
+    return ConnectedAccount(
+        id=account_id or uuid4(),
+        user_id=user_id,
+        email_address="work@gmail.com",
+        provider="gmail",
+        color="#4F46E5",
+        last_synced=None,
+        disconnected_at=None,
+        disconnected_reason=None,
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        oauth_token=OAuthTokens(
+            access_token="acc_tok",
+            refresh_token="ref_tok",
+            expires_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scope="https://www.googleapis.com/auth/gmail.readonly",
+        ),
+    )
 
 
 # --- GET /accounts ---
@@ -85,11 +90,12 @@ def test_delete_account_as_owner(authed_client: TestClient) -> None:
     acct = _make_account(_USER_ID, account_id)
     with (
         patch("app.routers.accounts.get_account", new_callable=AsyncMock, return_value=acct),
-        patch("app.routers.accounts.revoke", new_callable=AsyncMock),
+        patch("app.routers.accounts.revoke", new_callable=AsyncMock) as mock_revoke,
         patch("app.routers.accounts.delete_account", new_callable=AsyncMock),
     ):
         resp = authed_client.delete(f"/accounts/{account_id}")
     assert resp.status_code == 204
+    mock_revoke.assert_awaited_once_with("ref_tok")
 
 
 def test_delete_account_wrong_user_returns_404(authed_client: TestClient) -> None:
