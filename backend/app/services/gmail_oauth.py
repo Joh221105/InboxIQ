@@ -8,7 +8,7 @@ from uuid import UUID
 
 import httpx
 import jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 from app.models.connected_account import OAuthTokens
@@ -72,20 +72,56 @@ def verify_state(token: str) -> StateClaims:
         return StateClaims(**payload)
     except jwt.ExpiredSignatureError:
         raise StateExpired()
-    except (jwt.PyJWTError, Exception):
+    except (jwt.PyJWTError, ValidationError):
         raise StateInvalid()
 
 
 def build_authorize_url(user_id: UUID, return_to: str) -> str:
-    raise NotImplementedError
+    import urllib.parse as _up  # noqa: PLC0415
+    params = {
+        "client_id": settings.gmail_client_id,
+        "redirect_uri": settings.gmail_redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+        "state": sign_state({"user_id": str(user_id), "return_to": return_to}),
+    }
+    return f"{GOOGLE_AUTHORIZE_URL}?{_up.urlencode(params)}"
 
 
 async def exchange_code(code: str) -> OAuthTokens:
-    raise NotImplementedError
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": settings.gmail_client_id,
+                "client_secret": settings.gmail_client_secret,
+                "redirect_uri": settings.gmail_redirect_uri,
+            },
+        )
+    if resp.status_code != 200:
+        raise OAuthExchangeFailed(resp.text)
+    data = resp.json()
+    return OAuthTokens(
+        access_token=data["access_token"],
+        refresh_token=data["refresh_token"],
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+        scope=data.get("scope", ""),
+    )
 
 
 async def get_gmail_address(access_token: str) -> str:
-    raise NotImplementedError
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            GMAIL_PROFILE_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    resp.raise_for_status()
+    return resp.json()["emailAddress"]
 
 
 async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
