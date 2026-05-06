@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routers import accounts, auth, emails, users
+from app.tasks.scheduler import make_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,12 @@ _REQUIRED_ENV_VARS = [
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for var in _REQUIRED_ENV_VARS:
         logger.info("env %s present=%s", var, bool(os.getenv(var)))
-    yield
+    scheduler = make_scheduler()
+    scheduler.start()
+    try:
+        yield
+    finally:
+        scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="InboxIQ API", version="0.1.0", lifespan=lifespan)
