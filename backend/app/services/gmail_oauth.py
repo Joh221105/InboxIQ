@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import urllib.parse
 import uuid
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -11,6 +12,7 @@ import jwt
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
+from app.db.connected_accounts import get_account, update_oauth_token
 from app.models.connected_account import OAuthTokens
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -77,7 +79,6 @@ def verify_state(token: str) -> StateClaims:
 
 
 def build_authorize_url(user_id: UUID, return_to: str) -> str:
-    import urllib.parse as _up  # noqa: PLC0415
     params = {
         "client_id": settings.gmail_client_id,
         "redirect_uri": settings.gmail_redirect_uri,
@@ -88,7 +89,7 @@ def build_authorize_url(user_id: UUID, return_to: str) -> str:
         "include_granted_scopes": "true",
         "state": sign_state({"user_id": str(user_id), "return_to": return_to}),
     }
-    return f"{GOOGLE_AUTHORIZE_URL}?{_up.urlencode(params)}"
+    return f"{GOOGLE_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
 async def exchange_code(code: str) -> OAuthTokens:
@@ -106,12 +107,15 @@ async def exchange_code(code: str) -> OAuthTokens:
     if resp.status_code != 200:
         raise OAuthExchangeFailed(resp.text)
     data = resp.json()
-    return OAuthTokens(
-        access_token=data["access_token"],
-        refresh_token=data["refresh_token"],
-        expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
-        scope=data.get("scope", ""),
-    )
+    try:
+        return OAuthTokens(
+            access_token=data["access_token"],
+            refresh_token=data["refresh_token"],
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+            scope=data.get("scope", ""),
+        )
+    except (KeyError, TypeError) as exc:
+        raise OAuthExchangeFailed(f"Unexpected token response: {exc}") from exc
 
 
 async def get_gmail_address(access_token: str) -> str:
@@ -120,13 +124,56 @@ async def get_gmail_address(access_token: str) -> str:
             GMAIL_PROFILE_URL,
             headers={"Authorization": f"Bearer {access_token}"},
         )
-    resp.raise_for_status()
-    return resp.json()["emailAddress"]
+    if resp.status_code != 200:
+        raise OAuthExchangeFailed(f"Gmail profile fetch failed: {resp.status_code}")
+    try:
+        return resp.json()["emailAddress"]
+    except (KeyError, ValueError) as exc:
+        raise OAuthExchangeFailed(f"Unexpected Gmail profile response: {exc}") from exc
 
 
 async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
-    raise NotImplementedError
+    if account_id not in _refresh_locks:
+        _refresh_locks[account_id] = asyncio.Lock()
+    async with _refresh_locks[account_id]:
+        account = await get_account(account_id)
+        if account.oauth_token.expires_at > datetime.now(timezone.utc) + timedelta(seconds=60):
+            return account.oauth_token
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "client_id": settings.gmail_client_id,
+                    "client_secret": settings.gmail_client_secret,
+                },
+            )
+
+        if resp.status_code != 200:
+            body = resp.json()
+            raise RefreshFailed(is_invalid_grant=body.get("error") == "invalid_grant")
+
+        data = resp.json()
+        try:
+            new_tokens = OAuthTokens(
+                access_token=data["access_token"],
+                refresh_token=refresh_token,
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+                scope=data.get("scope", ""),
+            )
+        except (KeyError, TypeError) as exc:
+            raise RefreshFailed(is_invalid_grant=False) from exc
+        await update_oauth_token(account_id, new_tokens)
+        return new_tokens
 
 
 async def revoke(refresh_token: str) -> None:
-    raise NotImplementedError
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            GOOGLE_REVOKE_URL,
+            params={"token": refresh_token},
+        )
+    if resp.status_code not in (200, 400):
+        resp.raise_for_status()
