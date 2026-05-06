@@ -22,12 +22,19 @@ export type Email = {
   thread_id: string | null;
   subject: string | null;
   sender: string | null;
-  snippet: string | null;
   received_at: string | null;
   is_read: boolean;
   labels: string[];
   ai_summary: string | null;
   ai_category: string | null;
+  is_archived: boolean;
+  account_color: string | null;
+  created_at: string;
+};
+
+export type EmailListPage = {
+  items: Email[];
+  next_cursor: string | null;
 };
 
 export type ContactTag = {
