@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/components/sign-out-button";
 
@@ -56,6 +57,7 @@ export default function RootLayout({
           </div>
         </nav>
         <main className="flex-1 overflow-auto">{children}</main>
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
