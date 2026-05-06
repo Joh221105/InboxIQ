@@ -83,3 +83,139 @@ def test_parse_payload_truncates_to_2000_chars() -> None:
     result = parse_payload(payload)
     assert len(result) == BODY_PREVIEW_MAX_CHARS
     assert BODY_PREVIEW_MAX_CHARS == 2000
+
+
+# --- sync_account integration tests ---
+
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
+
+
+def _make_connected_account(user_id=None, last_synced=None, disconnected_at=None):
+    from datetime import datetime, timezone
+    from app.models.connected_account import ConnectedAccount, OAuthTokens
+    return ConnectedAccount(
+        id=uuid4(),
+        user_id=user_id or uuid4(),
+        provider="gmail",
+        email_address="test@gmail.com",
+        oauth_token=OAuthTokens(
+            access_token="acc",
+            refresh_token="ref",
+            expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
+            scope="https://www.googleapis.com/auth/gmail.readonly",
+        ),
+        color="#4F46E5",
+        last_synced=last_synced,
+        disconnected_at=disconnected_at,
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+
+
+def _make_parsed_email(external_id: str = "msg1"):
+    from datetime import datetime, timezone
+    from app.models.email import ParsedEmail
+    return ParsedEmail(
+        external_id=external_id,
+        sender_email="sender@example.com",
+        subject="Test",
+        body_preview="Body",
+        received_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+    )
+
+
+@pytest.mark.asyncio
+async def test_sync_account_inserts_messages() -> None:
+    from app.services.gmail_sync import sync_account
+
+    account = _make_connected_account()
+    parsed = _make_parsed_email("msg1")
+
+    with (
+        patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
+        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
+        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1"]),
+        patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, return_value=parsed),
+        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"),
+        patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
+    ):
+        result = await sync_account(account.id)
+
+    assert result.fetched == 1
+    assert result.inserted == 1
+    assert result.updated == 0
+    assert result.errors == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_account_skips_disconnected() -> None:
+    from datetime import datetime, timezone
+    from app.services.gmail_sync import sync_account
+
+    account = _make_connected_account(disconnected_at=datetime(2025, 1, 1, tzinfo=timezone.utc))
+
+    with patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account):
+        result = await sync_account(account.id)
+
+    assert result.fetched == 0
+    assert result.errors == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_account_skips_404_messages() -> None:
+    from app.services.gmail_sync import sync_account
+
+    account = _make_connected_account()
+
+    with (
+        patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
+        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
+        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1", "msg2"]),
+        patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, side_effect=[None, _make_parsed_email("msg2")]),
+        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"),
+        patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
+    ):
+        result = await sync_account(account.id)
+
+    assert result.fetched == 2
+    assert result.inserted == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_account_invalid_grant_marks_disconnected() -> None:
+    from app.services.gmail_sync import sync_account
+    from app.services.gmail_oauth import RefreshFailed
+
+    account = _make_connected_account()
+
+    with (
+        patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
+        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock,
+              side_effect=RefreshFailed(is_invalid_grant=True)),
+        patch("app.services.gmail_sync.mark_disconnected", new_callable=AsyncMock) as mock_mark,
+    ):
+        result = await sync_account(account.id)
+
+    mock_mark.assert_awaited_once_with(account.id, "invalid_grant")
+    assert result.errors > 0
+
+
+@pytest.mark.asyncio
+async def test_sync_account_idempotent_second_run_produces_zero_inserts() -> None:
+    from app.services.gmail_sync import sync_account
+
+    account = _make_connected_account()
+    parsed = _make_parsed_email("msg1")
+
+    with (
+        patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
+        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
+        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1"]),
+        patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, return_value=parsed),
+        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="updated"),
+        patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
+    ):
+        result = await sync_account(account.id)
+
+    assert result.inserted == 0
+    assert result.updated == 1

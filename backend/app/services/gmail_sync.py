@@ -73,3 +73,141 @@ def parse_payload(payload: dict) -> str:
     plain, html = _extract(payload)
     text = plain or html
     return text[:BODY_PREVIEW_MAX_CHARS]
+
+
+async def get_authed_service(account: ConnectedAccount):
+    tokens = account.oauth_token
+    if tokens.expires_at < datetime.now(timezone.utc) + timedelta(seconds=60):
+        tokens = await refresh_tokens(account.id, tokens.refresh_token)
+
+    creds = Credentials(token=tokens.access_token)
+
+    def _build():
+        return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+    return await asyncio.to_thread(_build)
+
+
+async def list_message_ids(service, after_unix_seconds: int | None) -> list[str]:
+    def _list() -> list[str]:
+        ids: list[str] = []
+        kwargs: dict = {"userId": "me"}
+        if after_unix_seconds is None:
+            kwargs["maxResults"] = INITIAL_SYNC_LIMIT
+        else:
+            kwargs["q"] = f"after:{after_unix_seconds}"
+
+        while True:
+            resp = service.users().messages().list(**kwargs).execute()
+            ids.extend(m["id"] for m in resp.get("messages", []))
+            page_token = resp.get("nextPageToken")
+            if not page_token or after_unix_seconds is None:
+                break
+            kwargs["pageToken"] = page_token
+
+        return ids
+
+    return await asyncio.to_thread(_list)
+
+
+_SENDER_RE = re.compile(r"<([^>]+)>")
+
+
+async def fetch_message(service, message_id: str) -> ParsedEmail | None:
+    def _get() -> dict | None:
+        try:
+            return (
+                service.users()
+                .messages()
+                .get(userId="me", id=message_id, format="full")
+                .execute()
+            )
+        except HttpError as exc:
+            if exc.resp.status == 404:
+                return None
+            raise
+
+    msg = await asyncio.to_thread(_get)
+    if msg is None:
+        return None
+
+    payload = msg.get("payload", {})
+    headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+
+    subject = headers.get("Subject", "")
+    from_header = headers.get("From", "")
+    m = _SENDER_RE.search(from_header)
+    sender_email = (m.group(1) if m else from_header).lower()
+
+    internal_date_ms = msg.get("internalDate")
+    if internal_date_ms:
+        received_at = datetime.fromtimestamp(
+            int(internal_date_ms) / 1000, tz=timezone.utc
+        )
+    else:
+        received_at = datetime.now(timezone.utc)
+
+    body_preview = parse_payload(payload)
+
+    return ParsedEmail(
+        external_id=message_id,
+        sender_email=sender_email,
+        subject=subject,
+        body_preview=body_preview,
+        received_at=received_at,
+    )
+
+
+async def sync_account(account_id: UUID) -> SyncResult:
+    account = await get_account(account_id)
+
+    if account.disconnected_at is not None:
+        return SyncResult(fetched=0, inserted=0, updated=0, errors=0)
+
+    sync_started_at = datetime.now(timezone.utc)
+
+    try:
+        service = await get_authed_service(account)
+    except RefreshFailed as exc:
+        if exc.is_invalid_grant:
+            await mark_disconnected(account_id, "invalid_grant")
+        return SyncResult(fetched=0, inserted=0, updated=0, errors=1)
+
+    after = (
+        int(account.last_synced.timestamp()) if account.last_synced else None
+    )
+
+    message_ids = await list_message_ids(service, after)
+    semaphore = asyncio.Semaphore(PER_ACCOUNT_CONCURRENCY)
+
+    async def process(mid: str) -> tuple[Literal["inserted", "updated", "skipped"], str]:
+        async with semaphore:
+            parsed = await fetch_message(service, mid)
+            if parsed is None:
+                return ("skipped", mid)
+            outcome = await upsert_email(account_id, account.user_id, parsed)
+            return (outcome, mid)
+
+    results = await asyncio.gather(
+        *[process(m) for m in message_ids], return_exceptions=True
+    )
+
+    inserted = updated = errors = 0
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error("sync_account error for account %s: %s", account_id, r)
+            errors += 1
+        elif r[0] == "inserted":
+            inserted += 1
+        elif r[0] == "updated":
+            updated += 1
+
+    if errors == 0:
+        await update_last_synced(account_id, sync_started_at)
+
+    return SyncResult(
+        fetched=len(message_ids),
+        inserted=inserted,
+        updated=updated,
+        errors=errors,
+    )
