@@ -7,12 +7,11 @@ export type User = {
 
 export type ConnectedAccount = {
   id: string;
-  user_id: string;
+  email_address: string;
   provider: string;
-  email: string;
   color: string | null;
-  token_expiry: string | null;
-  created_at: string;
+  last_synced: string | null;
+  disconnected_at: string | null;
 };
 
 export type Email = {
