@@ -1,19 +1,27 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.db.supabase import get_service_client
 from app.models.connected_account import ConnectedAccount, OAuthTokens
 
 
-def _row_to_account(row: dict) -> ConnectedAccount:
+def _row_to_account(row: dict[str, Any]) -> ConnectedAccount:
     raw_token = row.get("oauth_token") or {}
-    row = {**row, "oauth_token": OAuthTokens(**raw_token)}
-    return ConnectedAccount(**row)
+    try:
+        token = OAuthTokens(**raw_token)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Malformed oauth_token in DB for account {row.get('id')}: {exc}",
+        ) from exc
+    return ConnectedAccount(**{**row, "oauth_token": token})
 
 
 async def upsert_account(
@@ -22,7 +30,7 @@ async def upsert_account(
     provider: str,
     oauth_token: OAuthTokens,
 ) -> ConnectedAccount:
-    def _upsert() -> dict:
+    def _upsert() -> dict[str, Any]:
         client = get_service_client()
         result = client.table("connected_accounts").upsert(
             {
@@ -35,6 +43,8 @@ async def upsert_account(
             },
             on_conflict="user_id,email_address",
         ).execute()
+        if not result.data:
+            raise RuntimeError("upsert returned no data")
         row = result.data[0]
         if row.get("color") is None:
             client.rpc(
@@ -56,7 +66,7 @@ async def upsert_account(
 
 
 async def get_account(account_id: UUID) -> ConnectedAccount:
-    def _fetch() -> dict | None:
+    def _fetch() -> dict[str, Any] | None:
         result = (
             get_service_client()
             .table("connected_accounts")
@@ -65,7 +75,7 @@ async def get_account(account_id: UUID) -> ConnectedAccount:
             .maybe_single()
             .execute()
         )
-        return result.data if result is not None else None  # type: ignore[return-value]
+        return result.data  # type: ignore[return-value]
 
     row = await asyncio.to_thread(_fetch)
     if not row:
@@ -74,7 +84,7 @@ async def get_account(account_id: UUID) -> ConnectedAccount:
 
 
 async def list_user_accounts(user_id: UUID) -> list[ConnectedAccount]:
-    def _fetch() -> list[dict]:
+    def _fetch() -> list[dict[str, Any]]:
         result = (
             get_service_client()
             .table("connected_accounts")
@@ -90,7 +100,7 @@ async def list_user_accounts(user_id: UUID) -> list[ConnectedAccount]:
 
 
 async def update_oauth_token(account_id: UUID, new_token: OAuthTokens) -> ConnectedAccount:
-    def _update() -> dict:
+    def _update() -> dict[str, Any]:
         result = (
             get_service_client()
             .table("connected_accounts")
@@ -126,3 +136,30 @@ async def delete_account(account_id: UUID) -> None:
         ).execute()
 
     await asyncio.to_thread(_delete)
+
+
+async def update_last_synced(account_id: UUID, synced_at: datetime) -> None:
+    def _update() -> None:
+        get_service_client().table("connected_accounts").update(
+            {"last_synced": synced_at.isoformat()}
+        ).eq("id", str(account_id)).execute()
+
+    await asyncio.to_thread(_update)
+
+
+async def list_accounts_due_for_sync() -> list[ConnectedAccount]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=14)).isoformat()
+
+    def _fetch() -> list[dict[str, Any]]:
+        result = (
+            get_service_client()
+            .table("connected_accounts")
+            .select("*")
+            .is_("disconnected_at", "null")
+            .or_(f"last_synced.is.null,last_synced.lt.{cutoff}")
+            .execute()
+        )
+        return result.data or []
+
+    rows = await asyncio.to_thread(_fetch)
+    return [_row_to_account(r) for r in rows]
