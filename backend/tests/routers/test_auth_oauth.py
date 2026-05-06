@@ -132,3 +132,35 @@ def test_callback_user_cancelled(anon_client: TestClient) -> None:
     )
     assert resp.status_code == 302
     assert "reason=user_cancelled" in resp.headers["location"]
+
+
+def test_callback_exchange_failed(anon_client: TestClient) -> None:
+    from app.services.gmail_oauth import OAuthExchangeFailed
+    state = sign_state({"user_id": str(_USER_ID), "return_to": "/settings"})
+    with patch(
+        "app.routers.auth.exchange_code",
+        new_callable=AsyncMock,
+        side_effect=OAuthExchangeFailed("bad code"),
+    ):
+        resp = anon_client.get(
+            f"/auth/gmail/callback?code=bad_code&state={state}",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert "reason=exchange_failed" in resp.headers["location"]
+
+
+def test_callback_no_refresh_token(anon_client: TestClient) -> None:
+    state = sign_state({"user_id": str(_USER_ID), "return_to": "/settings"})
+    no_refresh = MagicMock()
+    no_refresh.access_token = "acc"
+    no_refresh.refresh_token = ""  # empty string is falsy
+    with (
+        patch("app.routers.auth.exchange_code", new_callable=AsyncMock, return_value=no_refresh),
+    ):
+        resp = anon_client.get(
+            f"/auth/gmail/callback?code=good_code&state={state}",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert "reason=no_refresh_token" in resp.headers["location"]

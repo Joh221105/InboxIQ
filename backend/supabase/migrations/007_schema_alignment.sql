@@ -21,8 +21,9 @@ ALTER TABLE public.connected_accounts
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'connected_accounts_user_id_email_address_key'
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'connected_accounts_user_id_email_address_key'
+          AND table_name = 'connected_accounts'
     ) THEN
         ALTER TABLE public.connected_accounts
             ADD CONSTRAINT connected_accounts_user_id_email_address_key
@@ -43,15 +44,16 @@ BEGIN
     ) THEN
         UPDATE public.connected_accounts
         SET oauth_token_jsonb = json_build_object(
-            'access_token',  COALESCE(oauth_token, ''),
-            'refresh_token', COALESCE(refresh_token, ''),
+            'access_token',  oauth_token,
+            'refresh_token', refresh_token,
             'expires_at',    COALESCE(token_expiry::text, now()::text),
             'scope',         'https://www.googleapis.com/auth/gmail.readonly'
-        );
+        )
+        WHERE oauth_token IS NOT NULL AND refresh_token IS NOT NULL;
     END IF;
 END $$;
 
--- 5. Drop the three old token columns
+-- 5. Drop two old token columns (refresh_token, token_expiry)
 ALTER TABLE public.connected_accounts
     DROP COLUMN IF EXISTS refresh_token,
     DROP COLUMN IF EXISTS token_expiry;
