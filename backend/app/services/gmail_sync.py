@@ -80,7 +80,10 @@ async def get_authed_service(account: ConnectedAccount):
     if tokens.expires_at < datetime.now(timezone.utc) + timedelta(seconds=60):
         tokens = await refresh_tokens(account.id, tokens.refresh_token)
 
-    creds = Credentials(token=tokens.access_token)
+    creds = Credentials(
+        token=tokens.access_token,
+        token_uri="https://oauth2.googleapis.com/token",
+    )
 
     def _build():
         return build("gmail", "v1", credentials=creds, cache_discovery=False)
@@ -164,6 +167,7 @@ async def sync_account(account_id: UUID) -> SyncResult:
     if account.disconnected_at is not None:
         return SyncResult(fetched=0, inserted=0, updated=0, errors=0)
 
+    # Capture time before sync so any emails arriving during the job are fetched next run
     sync_started_at = datetime.now(timezone.utc)
 
     try:
@@ -171,6 +175,8 @@ async def sync_account(account_id: UUID) -> SyncResult:
     except RefreshFailed as exc:
         if exc.is_invalid_grant:
             await mark_disconnected(account_id, "invalid_grant")
+        else:
+            logger.warning("Token refresh failed for account %s (non-grant error): %s", account_id, exc)
         return SyncResult(fetched=0, inserted=0, updated=0, errors=1)
 
     after = (
