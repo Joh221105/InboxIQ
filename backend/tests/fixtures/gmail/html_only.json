@@ -1,0 +1,27 @@
+{
+  "id": "msg_html",
+  "threadId": "thread_html",
+  "internalDate": "1735732800000",
+  "payload": {
+    "mimeType": "text/html",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Alice <alice@example.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "HTML Only Email"
+      },
+      {
+        "name": "Date",
+        "value": "Wed, 1 Jan 2025 12:00:00 +0000"
+      }
+    ],
+    "body": {
+      "size": 27,
+      "data": "PHA-SGVsbG8gPGI-SFRNTDwvYj4gd29ybGQ8L3A-"
+    },
+    "parts": []
+  }
+}

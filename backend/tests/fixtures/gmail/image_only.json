@@ -1,0 +1,35 @@
+{
+  "id": "msg_image",
+  "threadId": "thread_image",
+  "internalDate": "1735732800000",
+  "payload": {
+    "mimeType": "multipart/related",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Alice <alice@example.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "Image Only"
+      },
+      {
+        "name": "Date",
+        "value": "Wed, 1 Jan 2025 12:00:00 +0000"
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "mimeType": "image/jpeg",
+        "headers": [],
+        "body": {
+          "size": 2048,
+          "data": ""
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "msg_nested",
+  "threadId": "thread_nested",
+  "internalDate": "1735732800000",
+  "payload": {
+    "mimeType": "multipart/mixed",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Alice <alice@example.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "Nested Multipart"
+      },
+      {
+        "name": "Date",
+        "value": "Wed, 1 Jan 2025 12:00:00 +0000"
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "mimeType": "multipart/alternative",
+        "headers": [],
+        "body": {
+          "size": 0
+        },
+        "parts": [
+          {
+            "mimeType": "text/html",
+            "headers": [],
+            "body": {
+              "size": 25,
+              "data": "PHA-RGVlcGx5IG5lc3RlZCBIVE1MPC9wPg=="
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

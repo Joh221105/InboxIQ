@@ -1,0 +1,43 @@
+{
+  "id": "msg_alt",
+  "threadId": "thread_alt",
+  "internalDate": "1735732800000",
+  "payload": {
+    "mimeType": "multipart/alternative",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Alice <alice@example.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "Multipart Alternative"
+      },
+      {
+        "name": "Date",
+        "value": "Wed, 1 Jan 2025 12:00:00 +0000"
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "mimeType": "text/plain",
+        "headers": [],
+        "body": {
+          "size": 11,
+          "data": "SGVsbG8gcGxhaW4="
+        }
+      },
+      {
+        "mimeType": "text/html",
+        "headers": [],
+        "body": {
+          "size": 22,
+          "data": "PHA-SGVsbG8gSFRNTDwvcD4="
+        }
+      }
+    ]
+  }
+}

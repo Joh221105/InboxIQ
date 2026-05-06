@@ -1,0 +1,48 @@
+{
+  "id": "msg_related",
+  "threadId": "thread_related",
+  "internalDate": "1735732800000",
+  "payload": {
+    "mimeType": "multipart/related",
+    "headers": [
+      {
+        "name": "From",
+        "value": "Alice <alice@example.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "HTML with Inline Image"
+      },
+      {
+        "name": "Date",
+        "value": "Wed, 1 Jan 2025 12:00:00 +0000"
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "mimeType": "text/html",
+        "headers": [],
+        "body": {
+          "size": 30,
+          "data": "PHA-RW1haWwgd2l0aCBpbWFnZTwvcD4="
+        }
+      },
+      {
+        "mimeType": "image/png",
+        "headers": [
+          {
+            "name": "Content-ID",
+            "value": "<img001>"
+          }
+        ],
+        "body": {
+          "size": 500,
+          "data": ""
+        }
+      }
+    ]
+  }
+}
