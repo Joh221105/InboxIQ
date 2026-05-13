@@ -27,14 +27,34 @@ export type Email = {
   labels: string[];
   ai_summary: string | null;
   ai_category: string | null;
+  triage_category?: TriageCategory | null;
+  deadline_extracted?: string | null;
+  action_items?: string[];
+  ai_processed?: boolean;
+  pickup_used?: boolean;
   is_archived: boolean;
   account_color: string | null;
+  account_email?: string | null;
   created_at: string;
+  contact_tag?: { label: string; color: string } | null;
 };
 
 export type EmailListPage = {
   items: Email[];
   next_cursor: string | null;
+};
+
+export type TriageCategory = "action_required" | "worth_reading" | "auto_archive";
+
+export type EmailCounts = {
+  all: number;
+  action_required: number;
+  worth_reading: number;
+  auto_archive: number;
+};
+
+export type EmailBody = {
+  body_html: string;
 };
 
 export type ContactTag = {

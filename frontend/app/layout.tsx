@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/components/sign-out-button";
+import { Providers } from "@/components/providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -56,7 +57,9 @@ export default function RootLayout({
             <SignOutButton />
           </div>
         </nav>
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto">
+          <Providers>{children}</Providers>
+        </main>
         <Toaster richColors position="top-right" />
       </body>
     </html>

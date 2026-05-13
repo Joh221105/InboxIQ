@@ -1,11 +1,14 @@
 # backend/app/routers/emails.py
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import UserClaims, get_current_user
-from app.db.emails import list_emails
-from app.models.email import EmailFilters, EmailListPage
+from app.db.emails import get_email, get_email_counts, list_emails, update_email
+from app.models.email import Email, EmailBodyResponse, EmailCounts, EmailFilters, EmailListPage, EmailUpdate
+from app.services.email_body import fetch_email_body_html, sanitize_body_html
 
 router = APIRouter(prefix="/emails", tags=["emails"])
 
@@ -34,3 +37,33 @@ async def get_emails(
         limit=limit,
     )
     return await list_emails(filters)
+
+
+@router.get("/counts")
+async def counts(claims: UserClaims = Depends(get_current_user)) -> EmailCounts:
+    return await get_email_counts(claims.user_id)
+
+
+@router.patch("/{email_id}")
+async def patch_email(
+    email_id: UUID,
+    body: EmailUpdate,
+    claims: UserClaims = Depends(get_current_user),
+) -> Email:
+    updated = await update_email(email_id, claims.user_id, body)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Email not found")
+    return updated
+
+
+@router.get("/{email_id}/body")
+async def get_email_body(
+    email_id: UUID,
+    claims: UserClaims = Depends(get_current_user),
+) -> EmailBodyResponse:
+    email = await get_email(email_id, claims.user_id)
+    if email is None or email.user_id != claims.user_id:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    body_html = await fetch_email_body_html(email.account_id, email.gmail_id)
+    return EmailBodyResponse(body_html=sanitize_body_html(body_html))

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.auth import UserClaims, get_current_user
 from app.main import app
-from app.models.email import Email, EmailListPage
+from app.models.email import Email, EmailCounts, EmailListPage
 
 _USER_ID = uuid4()
 
@@ -93,3 +93,58 @@ def test_list_emails_with_cursor(authed_client: TestClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["next_cursor"] == "abc123"
+
+
+def test_list_emails_passes_search_param(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[_make_email()], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get("/emails?search=amazon")
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.search == "amazon"
+
+
+def test_list_emails_special_char_search_does_not_crash(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get("/emails", params={"search": "')(*&"})
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.search == "')(*&"
+
+
+def test_list_emails_all_tab_uses_priority_order_flag(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get("/emails")
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.triage_category is None
+
+
+def test_email_counts_returns_counts(authed_client: TestClient) -> None:
+    counts = EmailCounts(all=4, action_required=1, worth_reading=2, auto_archive=1)
+    with patch("app.routers.emails.get_email_counts", new_callable=AsyncMock, return_value=counts) as mock_counts:
+        resp = authed_client.get("/emails/counts")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "all": 4,
+        "action_required": 1,
+        "worth_reading": 2,
+        "auto_archive": 1,
+    }
+    mock_counts.assert_awaited_once_with(_USER_ID)
+
+
+def test_patch_email_returns_updated_email(authed_client: TestClient) -> None:
+    email = _make_email()
+    with patch("app.routers.emails.update_email", new_callable=AsyncMock, return_value=email) as mock_update:
+        resp = authed_client.patch(f"/emails/{email.id}", json={"is_archived": True})
+
+    assert resp.status_code == 200
+    assert resp.json()["id"] == str(email.id)
+    mock_update.assert_awaited_once()

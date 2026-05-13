@@ -1,10 +1,12 @@
-# backend/app/models/email.py
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
+
+TriageCategory = Literal["action_required", "worth_reading", "auto_archive"]
 
 
 class ParsedEmail(BaseModel):
@@ -35,6 +37,12 @@ class Email(BaseModel):
     labels: list[str] = []
     ai_summary: str | None = None
     ai_category: str | None = None
+    triage_category: TriageCategory | None = None
+    deadline_extracted: str | None = None
+    action_items: list[str] = []
+    ai_processed: bool = False
+    pickup_used: bool = False
+    account_email: str | None = None
     is_archived: bool = False
     account_color: str | None = None
     created_at: datetime
@@ -48,9 +56,25 @@ class EmailListPage(BaseModel):
 class EmailFilters(BaseModel):
     user_id: UUID
     account_id: UUID | None = None
-    triage_category: str | None = None   # maps to ai_category
+    triage_category: TriageCategory | None = None   # maps to ai_category in current schema
     is_archived: bool = False
     since: datetime | None = None
     search: str | None = None
     cursor: str | None = None
     limit: int = 50
+
+
+class EmailUpdate(BaseModel):
+    is_archived: bool | None = None
+    pickup_used: bool | None = None
+
+
+class EmailCounts(BaseModel):
+    all: int
+    action_required: int
+    worth_reading: int
+    auto_archive: int
+
+
+class EmailBodyResponse(BaseModel):
+    body_html: str
