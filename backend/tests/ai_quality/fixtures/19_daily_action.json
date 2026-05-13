@@ -1,0 +1,1 @@
+{"context":"Daily","expected_category":"action_required","notes":"Bill due soon","email":{"from":"billing@utility.example","subject":"Payment due soon","body":"Your utility bill is due by May 16 to avoid late fees."}}

@@ -258,6 +258,23 @@ cp .env.example .env.local
 npm run dev
 ```
 
+### Running AI quality tests
+
+```bash
+RUN_AI_QUALITY_TESTS=1 pytest backend/tests/ai_quality/
+```
+
+Estimated cost: about $0.20 per run.
+
+### Cost monitoring
+
+```sql
+SELECT date_trunc('day', created_at), sum(cost_usd)
+FROM ai_usage
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
 Visit `http://localhost:3000` → **Sign in** (magic link) → **Connect Gmail** → **Fetch recent emails** (expects ≥10 messages in the mailbox for the full acceptance check).
 
 ### 5. Deploy (skeleton)

@@ -1,13 +1,16 @@
+# backend/app/db/emails.py
 from __future__ import annotations
 
 import asyncio
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import UUID
 
 from app.db.supabase import get_service_client
 from app.models.email import Email, EmailCounts, EmailFilters, EmailListPage, EmailUpdate, ParsedEmail
+from app.models.ai import Digest, StoredDigest
+from app.services.triage import TriageResult
 
 _COUNTS_CACHE_TTL = timedelta(seconds=30)
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
@@ -40,6 +43,10 @@ def _row_to_email(row: dict[str, Any]) -> Email:
 
 def _clear_counts_cache(user_id: UUID) -> None:
     _counts_cache.pop(user_id, None)
+
+
+def _date_value(value: date | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 async def upsert_email(
@@ -207,3 +214,190 @@ async def get_email_counts(user_id: UUID) -> EmailCounts:
     )
     _counts_cache[user_id] = (now, counts)
     return counts
+
+
+async def apply_triage_result(email_id: UUID, result: TriageResult) -> None:
+    changes: dict[str, Any] = {
+        "ai_summary": result.summary,
+        "ai_category": result.category,
+        "triage_context": result.triage_context,
+        "deadline_extracted": _date_value(result.deadline_extracted),
+        "action_items": result.action_items or [],
+        "is_pickup_code": result.is_pickup_code,
+        "pickup_code": result.pickup_code,
+        "pickup_expiry": _date_value(result.pickup_expiry),
+        "retailer": result.retailer,
+        "locker_location": result.locker_location,
+        "ai_processed": True,
+        "last_ai_attempt_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    def _update() -> None:
+        get_service_client().table("emails").update(changes).eq("id", str(email_id)).execute()
+        get_service_client().rpc("increment_ai_attempts", {"p_email_id": str(email_id)}).execute()
+
+    await asyncio.to_thread(_update)
+
+
+async def mark_ai_failed(email_id: UUID) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+
+    def _update() -> int:
+        result = (
+            get_service_client()
+            .table("emails")
+            .update({"last_ai_attempt_at": now})
+            .eq("id", str(email_id))
+            .select("ai_attempts")
+            .maybe_single()
+            .execute()
+        )
+        current = (result.data or {}).get("ai_attempts") or 0
+        attempts = int(current) + 1
+        changes: dict[str, Any] = {"ai_attempts": attempts, "last_ai_attempt_at": now}
+        if attempts >= 3:
+            changes.update(
+                {
+                    "ai_processed": True,
+                    "ai_category": "worth_reading",
+                    "ai_summary": "(AI unavailable)",
+                }
+            )
+        get_service_client().table("emails").update(changes).eq("id", str(email_id)).execute()
+        return attempts
+
+    return await asyncio.to_thread(_update)
+
+
+async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+
+    def _fetch() -> list[dict[str, Any]]:
+        result = (
+            get_service_client()
+            .table("emails")
+            .select("*, connected_accounts(color,email_address)")
+            .eq("ai_processed", False)
+            .or_(f"last_ai_attempt_at.is.null,last_ai_attempt_at.lt.{cutoff.isoformat()}")
+            .order("received_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
+    rows = await asyncio.to_thread(_fetch)
+    return [_row_to_email(row) for row in rows]
+
+
+async def list_emails_for_retriage(user_id: UUID, limit: int = 100) -> list[Email]:
+    def _fetch() -> list[dict[str, Any]]:
+        result = (
+            get_service_client()
+            .table("emails")
+            .select("*, connected_accounts(color,email_address)")
+            .eq("user_id", str(user_id))
+            .eq("is_read", False)
+            .eq("is_archived", False)
+            .order("received_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
+    rows = await asyncio.to_thread(_fetch)
+    return [_row_to_email(row) for row in rows]
+
+
+async def update_email_triage_only(
+    email_id: UUID,
+    category: str,
+    summary: str,
+    context: str,
+) -> None:
+    def _update() -> None:
+        get_service_client().table("emails").update(
+            {
+                "ai_category": category,
+                "ai_summary": summary,
+                "triage_context": context,
+                "ai_processed": True,
+            }
+        ).eq("id", str(email_id)).execute()
+
+    await asyncio.to_thread(_update)
+
+
+async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Email]:
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    def _fetch() -> list[dict[str, Any]]:
+        result = (
+            get_service_client()
+            .table("emails")
+            .select("*, connected_accounts(color,email_address)")
+            .eq("user_id", str(user_id))
+            .eq("ai_category", "action_required")
+            .gte("received_at", since.isoformat())
+            .order("received_at", desc=True)
+            .execute()
+        )
+        return result.data or []
+
+    rows = await asyncio.to_thread(_fetch)
+    return [_row_to_email(row) for row in rows]
+
+
+async def list_upcoming_deadlines(user_id: UUID, days: int = 7) -> list[Email]:
+    today = date.today()
+    end = today + timedelta(days=days)
+
+    def _fetch() -> list[dict[str, Any]]:
+        result = (
+            get_service_client()
+            .table("emails")
+            .select("*, connected_accounts(color,email_address)")
+            .eq("user_id", str(user_id))
+            .gte("deadline_extracted", today.isoformat())
+            .lte("deadline_extracted", end.isoformat())
+            .order("deadline_extracted", desc=False)
+            .execute()
+        )
+        return result.data or []
+
+    rows = await asyncio.to_thread(_fetch)
+    return [_row_to_email(row) for row in rows]
+
+
+async def get_digest(user_id: UUID, digest_date: date) -> StoredDigest | None:
+    def _fetch() -> dict[str, Any] | None:
+        result = (
+            get_service_client()
+            .table("daily_digests")
+            .select("*")
+            .eq("user_id", str(user_id))
+            .eq("digest_date", digest_date.isoformat())
+            .maybe_single()
+            .execute()
+        )
+        return result.data
+
+    data = await asyncio.to_thread(_fetch)
+    if not data:
+        return None
+    data["payload"] = Digest.model_validate(data["payload"])
+    return StoredDigest.model_validate(data)
+
+
+async def upsert_digest(user_id: UUID, digest_date: date, digest: Digest) -> None:
+    payload = {
+        "user_id": str(user_id),
+        "digest_date": digest_date.isoformat(),
+        "payload": digest.model_dump(mode="json"),
+        "degraded": digest.degraded,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    def _upsert() -> None:
+        get_service_client().table("daily_digests").upsert(payload).execute()
+
+    await asyncio.to_thread(_upsert)

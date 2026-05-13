@@ -71,15 +71,21 @@ def test_get_me_mangled_token(unauthed_client: TestClient) -> None:
 
 def test_patch_context_happy(authed_client: TestClient) -> None:
     updated = _USER.model_copy(update={"default_context": "Job Hunting"})
+    job = type("Job", (), {"job_id": "job1", "total": 3})()
     with patch(
-        "app.routers.users.update_default_context",
+        "app.routers.users.start_retriage",
+        new=AsyncMock(return_value=job),
+    ), patch(
+        "app.routers.users.get_user",
         new=AsyncMock(return_value=updated),
     ):
         resp = authed_client.patch(
             "/users/me/context", json={"context": "Job Hunting"}
         )
     assert resp.status_code == 200
-    assert resp.json()["default_context"] == "Job Hunting"
+    assert resp.json()["user"]["default_context"] == "Job Hunting"
+    assert resp.json()["job_id"] == "job1"
+    assert resp.json()["total"] == 3
 
 
 def test_patch_context_invalid_value(authed_client: TestClient) -> None:

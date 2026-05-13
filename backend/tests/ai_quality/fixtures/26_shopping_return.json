@@ -1,0 +1,1 @@
+{"context":"Shopping","expected_category":"action_required","notes":"Return deadline","email":{"from":"returns@store.example","subject":"Return window closing","body":"Your return must be dropped off by May 17 for a refund."}}

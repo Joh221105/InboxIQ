@@ -1,0 +1,1 @@
+{"context":"Daily","expected_category":"action_required","notes":"Spanish security alert","email":{"from":"security@bank.example","subject":"Alerta de seguridad","body":"Detectamos un inicio de sesion nuevo. Verifica tu cuenta antes de manana."}}

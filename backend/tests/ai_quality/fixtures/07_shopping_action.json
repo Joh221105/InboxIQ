@@ -1,0 +1,1 @@
+{"context":"Shopping","expected_category":"action_required","notes":"Amazon pickup code","email":{"from":"no-reply@amazon.example","subject":"Your Amazon Locker pickup code","body":"Your order is ready at Oak Locker. Pickup code 1234 5678 expires May 16."}}

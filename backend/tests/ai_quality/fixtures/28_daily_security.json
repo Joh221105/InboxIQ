@@ -1,0 +1,1 @@
+{"context":"Daily","expected_category":"action_required","notes":"Security alert","email":{"from":"security@example.com","subject":"New sign-in detected","body":"A new sign-in was detected. Reset your password if this was not you."}}

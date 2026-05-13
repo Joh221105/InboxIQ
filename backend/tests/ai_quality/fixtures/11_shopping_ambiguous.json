@@ -1,0 +1,1 @@
+{"context":"Shopping","expected_category":"worth_reading","notes":"Order confirmation","email":{"from":"orders@example.com","subject":"Order confirmation","body":"Thank you for your purchase. Your confirmation number is ABC123."}}

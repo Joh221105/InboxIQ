@@ -11,7 +11,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import accounts, auth, emails, users
+from app.routers import accounts, auth, digest, emails, triage, users
+from app.tasks.ai_worker import run_forever as run_ai_worker
 from app.tasks.scheduler import make_scheduler
 
 logger = logging.getLogger(__name__)
@@ -35,9 +36,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("env %s present=%s", var, bool(os.getenv(var)))
     scheduler = make_scheduler()
     scheduler.start()
+    ai_worker_task = asyncio.create_task(run_ai_worker())
     try:
         yield
     finally:
+        ai_worker_task.cancel()
+        try:
+            await ai_worker_task
+        except asyncio.CancelledError:
+            pass
         scheduler.shutdown(wait=False)
 
 
@@ -55,6 +62,8 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(accounts.router)
 app.include_router(emails.router)
+app.include_router(triage.router)
+app.include_router(digest.router)
 
 
 async def _probe_supabase() -> str:

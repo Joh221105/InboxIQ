@@ -1,10 +1,11 @@
+# backend/app/models/email.py
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 TriageCategory = Literal["action_required", "worth_reading", "auto_archive"]
 
@@ -32,15 +33,24 @@ class Email(BaseModel):
     thread_id: str | None = None
     subject: str | None = None
     sender: str | None = None
+    body_text: str | None = Field(default=None, exclude=True)
     received_at: datetime | None = None
     is_read: bool = False
     labels: list[str] = []
     ai_summary: str | None = None
     ai_category: str | None = None
     triage_category: TriageCategory | None = None
+    triage_context: str | None = None
     deadline_extracted: str | None = None
     action_items: list[str] = []
     ai_processed: bool = False
+    ai_attempts: int = 0
+    last_ai_attempt_at: datetime | None = None
+    is_pickup_code: bool = False
+    pickup_code: str | None = None
+    pickup_expiry: str | None = None
+    retailer: str | None = None
+    locker_location: str | None = None
     pickup_used: bool = False
     account_email: str | None = None
     is_archived: bool = False

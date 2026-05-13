@@ -1,0 +1,1 @@
+{"context":"School Application","expected_category":"action_required","notes":"Decision response","email":{"from":"admissions@school.example","subject":"Admission decision available","body":"Your decision is ready. Please log in and respond by April 15."}}

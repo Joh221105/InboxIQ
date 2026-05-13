@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -70,3 +70,45 @@ async def test_get_email_returns_none_for_missing() -> None:
         result = await get_email(uuid4(), uuid4())
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_mark_ai_failed_after_third_attempt_sets_unavailable_summary() -> None:
+    from app.db.emails import mark_ai_failed
+
+    email_id = UUID("12345678-1234-5678-1234-567812345678")
+    updates: list[dict] = []
+
+    class _Result:
+        data = {"ai_attempts": 2}
+
+    class _Chain:
+        def update(self, changes):
+            updates.append(changes)
+            return self
+
+        def eq(self, *_args):
+            return self
+
+        def select(self, *_args):
+            return self
+
+        def maybe_single(self):
+            return self
+
+        def execute(self):
+            return _Result()
+
+    class _Client:
+        def table(self, name):
+            assert name == "emails"
+            return _Chain()
+
+    with patch("app.db.emails.get_service_client", return_value=_Client()):
+        attempts = await mark_ai_failed(email_id)
+
+    assert attempts == 3
+    assert updates[-1]["ai_attempts"] == 3
+    assert updates[-1]["ai_processed"] is True
+    assert updates[-1]["ai_category"] == "worth_reading"
+    assert updates[-1]["ai_summary"] == "(AI unavailable)"
