@@ -25,6 +25,11 @@ class SyncResult(BaseModel):
     errors: int
 
 
+class ContactTagInfo(BaseModel):
+    label: str
+    color: str
+
+
 class Email(BaseModel):
     id: UUID
     user_id: UUID
@@ -55,6 +60,7 @@ class Email(BaseModel):
     account_email: str | None = None
     is_archived: bool = False
     account_color: str | None = None
+    contact_tag: ContactTagInfo | None = None
     created_at: datetime
 
 
@@ -70,6 +76,7 @@ class EmailFilters(BaseModel):
     is_archived: bool = False
     since: datetime | None = None
     search: str | None = None
+    sender_search: str | None = None
     has_deadline: bool = False
     deadline_after: date | None = None
     deadline_before: date | None = None
