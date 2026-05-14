@@ -45,7 +45,7 @@ async def test_triage_email_none_body_skips_openai() -> None:
 
     call_json = AsyncMock()
     with patch("app.services.triage.call_json", call_json):
-        result = await triage_email(_email(body=None), "Job Hunting")  # type: ignore[arg-type]
+        result = await triage_email(_email(body=None), "Job Hunting")
 
     assert result.category == "auto_archive"
     assert result.summary == "Image-only email — no readable text."
