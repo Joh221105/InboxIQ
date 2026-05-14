@@ -26,6 +26,8 @@ class SyncResult(BaseModel):
 
 
 class ContactTagInfo(BaseModel):
+    """Read-only projection of a contact tag embedded in email responses.
+    label is always populated: custom_label if set, else tag.capitalize()."""
     label: str
     color: str
 
@@ -76,7 +78,7 @@ class EmailFilters(BaseModel):
     is_archived: bool = False
     since: datetime | None = None
     search: str | None = None
-    sender_search: str | None = None
+    sender_search: str | None = None  # wired to ilike filter in db/emails.py (Fix E)
     has_deadline: bool = False
     deadline_after: date | None = None
     deadline_before: date | None = None
