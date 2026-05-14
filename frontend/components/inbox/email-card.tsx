@@ -37,8 +37,11 @@ export function EmailCard({
   const category = categoryFor(email);
   const summary =
     email.ai_summary || email.ai_processed === false ? email.ai_summary : null;
-  const border =
-    category === "action_required"
+  const tagColor = email.contact_tag?.color;
+  const borderStyle = tagColor ? { borderLeftColor: tagColor } : undefined;
+  const borderClass = tagColor
+    ? "border-l-4"
+    : category === "action_required"
       ? "border-l-red-500"
       : category === "worth_reading"
         ? "border-l-amber-400"
@@ -56,9 +59,10 @@ export function EmailCard({
           onClick();
         }
       }}
+      style={borderStyle}
       className={cn(
         "grid h-[88px] w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border border-l-[3px] bg-background px-4 text-left text-sm transition hover:bg-muted/50",
-        border,
+        borderClass,
         category === "auto_archive" && "opacity-60",
         selected && "ring-2 ring-primary",
       )}
