@@ -33,7 +33,22 @@ async def test_triage_email_empty_body_skips_openai() -> None:
         result = await triage_email(_email(body="   "), "Job Hunting")
 
     assert result.category == "auto_archive"
-    assert result.summary == "(No readable content)"
+    assert result.summary == "Image-only email — no readable text."
+    assert result.triage_context == "Job Hunting"
+    call_json.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_triage_email_none_body_skips_openai() -> None:
+    """Image-only emails with body_text=None must return auto_archive without calling OpenAI."""
+    from app.services.triage import triage_email
+
+    call_json = AsyncMock()
+    with patch("app.services.triage.call_json", call_json):
+        result = await triage_email(_email(body=None), "Job Hunting")  # type: ignore[arg-type]
+
+    assert result.category == "auto_archive"
+    assert result.summary == "Image-only email — no readable text."
     assert result.triage_context == "Job Hunting"
     call_json.assert_not_awaited()
 

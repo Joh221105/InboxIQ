@@ -58,7 +58,7 @@ async def triage_email(email: Email, user_context: str) -> TriageResult:
     if not body.strip():
         return TriageResult(
             category="auto_archive",
-            summary="(No readable content)",
+            summary="Image-only email — no readable text.",
             triage_context=user_context,
         )
 
