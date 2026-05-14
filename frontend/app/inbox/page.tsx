@@ -30,13 +30,14 @@ function InboxPageContent() {
   const searchParams = useSearchParams();
   const tab = tabFromParam(searchParams.get("tab"));
   const q = searchParams.get("q") ?? "";
+  const senderSearch = searchParams.get("sender_search") ?? "";
   const deepLinkedEmailId = searchParams.get("email_id");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  const emailsQuery = useEmails({ category: tab, search: q });
+  const emailsQuery = useEmails({ category: tab, search: q || undefined, senderSearch: senderSearch || undefined });
   const countsQuery = useEmailCounts();
   const archiveMutation = useArchiveEmail();
 

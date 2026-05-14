@@ -16,7 +16,7 @@ export function SearchBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [bySender, setBySender] = useState(false);
+  const [bySender, setBySender] = useState(() => searchParams.has("sender_search"));
   const [value, setValue] = useState(
     searchParams.get("q") ?? searchParams.get("sender_search") ?? ""
   );
@@ -39,22 +39,7 @@ export function SearchBar({
   }, [pathname, router, searchParams, value, bySender]);
 
   function handleToggleBySender() {
-    setBySender((prev) => {
-      const next = new URLSearchParams(searchParams.toString());
-      if (!prev) {
-        // switching to bySender mode
-        if (value) next.set("sender_search", value);
-        else next.delete("sender_search");
-        next.delete("q");
-      } else {
-        // switching to keyword mode
-        if (value) next.set("q", value);
-        else next.delete("q");
-        next.delete("sender_search");
-      }
-      startTransition(() => router.replace(`${pathname}?${next.toString()}`));
-      return !prev;
-    });
+    setBySender((prev) => !prev);
   }
 
   return (
@@ -71,11 +56,12 @@ export function SearchBar({
       <button
         type="button"
         onClick={handleToggleBySender}
+        disabled={isPending}
+        aria-pressed={bySender}
         className={cn(
           "rounded-full px-2 py-0.5 text-xs border whitespace-nowrap",
-          bySender
-            ? "bg-primary text-primary-foreground border-primary"
-            : "border-input text-muted-foreground"
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          bySender ? "bg-primary text-primary-foreground border-primary" : "border-input text-muted-foreground"
         )}
       >
         By sender
