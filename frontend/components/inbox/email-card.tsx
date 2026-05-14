@@ -37,10 +37,10 @@ export function EmailCard({
   const category = categoryFor(email);
   const summary =
     email.ai_summary || email.ai_processed === false ? email.ai_summary : null;
-  const tagColor = email.contact_tag?.color;
+  const tagColor = email.contact_tag?.color || undefined;
   const borderStyle = tagColor ? { borderLeftColor: tagColor } : undefined;
   const borderClass = tagColor
-    ? "border-l-4"
+    ? "border-l-[3px]"   // width matches base; color comes from inline style
     : category === "action_required"
       ? "border-l-red-500"
       : category === "worth_reading"

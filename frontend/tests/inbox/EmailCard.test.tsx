@@ -40,7 +40,7 @@ function renderCard(email: Email) {
 
 describe("EmailCard", () => {
   it("renders action required email with deadline and contact tag", () => {
-    renderCard({
+    const { getByTestId } = renderCard({
       ...baseEmail,
       triage_category: "action_required",
       deadline_extracted: "2026-11-15",
@@ -50,6 +50,20 @@ describe("EmailCard", () => {
     expect(screen.getByText("Recruiter")).toBeInTheDocument();
     expect(screen.getByText("Due Nov 15")).toBeInTheDocument();
     expect(screen.getByLabelText("Triage category: Action required")).toBeInTheDocument();
+    const card = getByTestId("email-card");
+    expect(card).toHaveStyle({ borderLeftColor: "#dbeafe" });
+  });
+
+  it("contact_tag with empty color falls back to triage border class", () => {
+    const { getByTestId } = renderCard({
+      ...baseEmail,
+      triage_category: "action_required",
+      contact_tag: { label: "X", color: "" },
+    });
+
+    const card = getByTestId("email-card");
+    // No inline borderLeftColor should be set; border color comes from Tailwind class
+    expect(card.style.borderLeftColor).toBeFalsy();
   });
 
   it("renders worth reading without optional badges", () => {
