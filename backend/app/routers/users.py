@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Dict, Literal, Union
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -33,7 +33,7 @@ async def get_me(claims: UserClaims = Depends(get_current_user)) -> User:
     return await get_user(claims.user_id)
 
 
-@router.patch("/me/context", response_model=UpdateContextResponse | dict[str, int | str])
+@router.patch("/me/context", response_model=Union[UpdateContextResponse, Dict[str, Any]])
 async def patch_context(
     body: UpdateContextBody,
     claims: UserClaims = Depends(get_current_user),

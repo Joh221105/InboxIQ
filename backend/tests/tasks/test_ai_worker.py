@@ -27,6 +27,18 @@ def _email(user_id=None) -> Email:
 
 
 @pytest.mark.asyncio
+async def test_process_batch_returns_zero_when_no_emails() -> None:
+    from app.tasks.ai_worker import process_batch
+
+    triage_email = AsyncMock()
+    with patch("app.tasks.ai_worker.list_unprocessed_emails", new=AsyncMock(return_value=[])):
+        count = await process_batch()
+
+    assert count == 0
+    triage_email.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_process_batch_applies_success_and_marks_failure() -> None:
     from app.tasks.ai_worker import process_batch
 

@@ -25,6 +25,49 @@ def _email(subject: str, deadline: str | None = None) -> Email:
 
 
 @pytest.mark.asyncio
+async def test_generate_daily_digest_returns_ai_items_when_successful() -> None:
+    from app.models.ai import DigestItem, DigestResponse
+    from app.services.digest import generate_daily_digest
+
+    action_email = _email("Interview follow-up required")
+    item = DigestItem(
+        summary="Follow up on Anthropic interview.",
+        source_email_id=action_email.id,
+        sender=action_email.sender or "",
+    )
+    response = DigestResponse(items=[item])
+
+    with (
+        patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[action_email])),
+        patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[])),
+        patch("app.services.digest.call_json", new=AsyncMock(return_value=response)),
+    ):
+        digest = await generate_daily_digest(uuid4())
+
+    assert digest.degraded is False
+    assert len(digest.items) == 1
+    assert digest.items[0].summary == "Follow up on Anthropic interview."
+
+
+@pytest.mark.asyncio
+async def test_generate_daily_digest_returns_empty_when_no_emails() -> None:
+    from app.services.digest import generate_daily_digest
+    from app.services.openai_client import call_json as real_call_json
+
+    call_json = AsyncMock()
+    with (
+        patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[])),
+        patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[])),
+        patch("app.services.digest.call_json", call_json),
+    ):
+        digest = await generate_daily_digest(uuid4())
+
+    assert digest.items == []
+    assert digest.degraded is False
+    call_json.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_digest_degraded_fallback_includes_upcoming_deadlines() -> None:
     from app.services.digest import generate_daily_digest
 

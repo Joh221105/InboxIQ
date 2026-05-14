@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Dict, Literal, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -29,7 +29,7 @@ class JobStatusResponse(BaseModel):
     total: int
 
 
-@router.post("/triage/retriage", response_model=RetriageStartResponse | dict[str, int | str])
+@router.post("/triage/retriage", response_model=Union[RetriageStartResponse, Dict[str, Any]])
 async def post_retriage(
     body: RetriageBody,
     claims: UserClaims = Depends(get_current_user),

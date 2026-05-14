@@ -41,6 +41,25 @@ async def test_start_retriage_rate_limits_second_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_retriage_does_not_rate_limit_different_users() -> None:
+    from app.services import retriage
+
+    retriage._last_request_at.clear()
+    user1 = uuid4()
+    user2 = uuid4()
+
+    with (
+        patch("app.services.retriage.update_default_context", new=AsyncMock()),
+        patch("app.services.retriage.list_emails_for_retriage", new=AsyncMock(return_value=[])),
+    ):
+        await retriage.start_retriage(user1, "Daily")
+        # user1 is now rate limited — user2 must still succeed
+        job = await retriage.start_retriage(user2, "Shopping")
+
+    assert job.user_id == user2
+
+
+@pytest.mark.asyncio
 async def test_retriage_job_tracking_moves_to_done() -> None:
     from app.services import retriage
 
