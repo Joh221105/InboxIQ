@@ -24,6 +24,8 @@ from app.services.triage import TriageResult
 _COUNTS_CACHE_TTL = timedelta(seconds=30)
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
 
+_EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)"
+
 
 def _cursor_encode(received_at: datetime, email_id: UUID) -> str:
     raw = f"{received_at.isoformat()}|{email_id}"
@@ -40,7 +42,7 @@ def _build_contact_tag(row_tag: dict | None) -> ContactTagInfo | None:
     if not row_tag:
         return None
     label = row_tag.get("custom_label") or row_tag["tag"].capitalize()
-    return ContactTagInfo(label=label, color=row_tag["color"])
+    return ContactTagInfo(label=label, color=row_tag.get("color") or "#6b7280")
 
 
 def _row_to_email(row: dict[str, Any]) -> Email:
@@ -109,7 +111,7 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         q = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .eq("user_id", str(filters.user_id))
             .eq("is_archived", filters.is_archived)
         )
@@ -184,7 +186,7 @@ async def get_email(email_id: UUID, user_id: UUID) -> Email | None:
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .eq("id", str(email_id))
             .eq("user_id", str(user_id))
             .maybe_single()
@@ -219,7 +221,7 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
             .update(changes)
             .eq("id", str(email_id))
             .eq("user_id", str(user_id))
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .maybe_single()
             .execute()
         )
@@ -358,7 +360,7 @@ async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .eq("ai_processed", False)
             .or_(f"last_ai_attempt_at.is.null,last_ai_attempt_at.lt.{cutoff.isoformat()}")
             .order("received_at", desc=True)
@@ -376,7 +378,7 @@ async def list_emails_for_retriage(user_id: UUID, limit: int = 100) -> list[Emai
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .eq("user_id", str(user_id))
             .eq("is_read", False)
             .eq("is_archived", False)
@@ -416,7 +418,7 @@ async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Em
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .eq("user_id", str(user_id))
             .eq("ai_category", "action_required")
             .gte("received_at", since.isoformat())
@@ -437,7 +439,7 @@ async def list_upcoming_deadlines(user_id: UUID, days: int = 7) -> list[Email]:
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
+            .select(_EMAIL_SELECT)
             .eq("user_id", str(user_id))
             .gte("deadline_extracted", today.isoformat())
             .lte("deadline_extracted", end.isoformat())

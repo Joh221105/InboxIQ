@@ -112,3 +112,27 @@ async def test_mark_ai_failed_after_third_attempt_sets_unavailable_summary() -> 
     assert updates[-1]["ai_processed"] is True
     assert updates[-1]["ai_category"] == "worth_reading"
     assert updates[-1]["ai_summary"] == "(AI unavailable)"
+
+
+def test_build_contact_tag_none_input_returns_none() -> None:
+    from app.db.emails import _build_contact_tag
+
+    assert _build_contact_tag(None) is None
+
+
+def test_build_contact_tag_uses_custom_label_when_set() -> None:
+    from app.db.emails import _build_contact_tag
+
+    result = _build_contact_tag({"tag": "recruiter", "custom_label": "Recruiter", "color": "#ff0000"})
+    assert result is not None
+    assert result.label == "Recruiter"
+    assert result.color == "#ff0000"
+
+
+def test_build_contact_tag_capitalizes_tag_when_custom_label_is_none() -> None:
+    from app.db.emails import _build_contact_tag
+
+    result = _build_contact_tag({"tag": "recruiter", "custom_label": None, "color": None})
+    assert result is not None
+    assert result.label == "Recruiter"
+    assert result.color == "#6b7280"
