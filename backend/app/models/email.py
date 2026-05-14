@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 TriageCategory = Literal["action_required", "worth_reading", "auto_archive"]
 
@@ -85,6 +85,11 @@ class EmailFilters(BaseModel):
     order: Literal["received_desc", "deadline_asc"] = "received_desc"
     cursor: str | None = None
     limit: int = 50
+
+    @field_validator("sender_search")
+    @classmethod
+    def _strip_sender_search(cls, v: str | None) -> str | None:
+        return v.strip() or None if v else None
 
 
 class EmailUpdate(BaseModel):

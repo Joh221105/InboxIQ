@@ -105,6 +105,26 @@ def test_list_emails_passes_search_param(authed_client: TestClient) -> None:
     assert call_filters.search == "amazon"
 
 
+def test_list_emails_passes_sender_search_param(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[_make_email()], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get("/emails?sender_search=alice")
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.sender_search == "alice"
+
+
+def test_list_emails_blank_sender_search_is_ignored(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get("/emails?sender_search=")
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.sender_search is None
+
+
 def test_list_emails_special_char_search_does_not_crash(authed_client: TestClient) -> None:
     page = EmailListPage(items=[], next_cursor=None)
     with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
