@@ -9,6 +9,7 @@ import type { Email, EmailBody, EmailCounts, EmailListPage, TriageCategory } fro
 type EmailQueryArgs = {
   category?: TriageCategory | "all";
   search?: string;
+  senderSearch?: string;
   accountId?: string;
 };
 
@@ -17,6 +18,7 @@ function buildEmailPath(args: EmailQueryArgs, cursor?: string | null): string {
   params.set("limit", "50");
   if (args.category && args.category !== "all") params.set("triage_category", args.category);
   if (args.search) params.set("search", args.search);
+  if (args.senderSearch) params.set("sender_search", args.senderSearch);
   if (args.accountId) params.set("account_id", args.accountId);
   if (cursor) params.set("cursor", cursor);
   return `/emails?${params.toString()}`;
