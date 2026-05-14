@@ -88,3 +88,19 @@ class EmailCounts(BaseModel):
 
 class EmailBodyResponse(BaseModel):
     body_html: str
+
+
+class PickupCodeRow(BaseModel):
+    email_id: UUID
+    pickup_code: str
+    pickup_expiry: str | None = None
+    pickup_used_at: datetime | None = None
+    retailer: str | None = None
+    locker_location: str | None = None
+    sender_email: str | None = None
+    subject: str | None = None
+    received_at: datetime | None = None
+
+
+class PickupCodeListResponse(BaseModel):
+    items: list[PickupCodeRow]

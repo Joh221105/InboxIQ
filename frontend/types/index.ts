@@ -57,6 +57,22 @@ export type EmailBody = {
   body_html: string;
 };
 
+export type PickupCode = {
+  email_id: string;
+  pickup_code: string;
+  pickup_expiry: string | null;
+  pickup_used_at: string | null;
+  retailer: string | null;
+  locker_location: string | null;
+  sender_email: string | null;
+  subject: string | null;
+  received_at: string | null;
+};
+
+export type PickupCodeList = {
+  items: PickupCode[];
+};
+
 export type ContactTag = {
   id: string;
   user_id: string;

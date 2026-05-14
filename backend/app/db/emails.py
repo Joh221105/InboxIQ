@@ -8,7 +8,15 @@ from typing import Any, Literal
 from uuid import UUID
 
 from app.db.supabase import get_service_client
-from app.models.email import Email, EmailCounts, EmailFilters, EmailListPage, EmailUpdate, ParsedEmail
+from app.models.email import (
+    Email,
+    EmailCounts,
+    EmailFilters,
+    EmailListPage,
+    EmailUpdate,
+    ParsedEmail,
+    PickupCodeRow,
+)
 from app.models.ai import Digest, StoredDigest
 from app.services.triage import TriageResult
 
@@ -39,6 +47,14 @@ def _row_to_email(row: dict[str, Any]) -> Email:
     if raw_items is None:
         row["action_items"] = []
     return Email(**row, account_color=account_color, account_email=account_email)
+
+
+def _row_to_pickup_code(row: dict[str, Any]) -> PickupCodeRow:
+    data = dict(row)
+    data["email_id"] = data.pop("email_id", data.pop("id", None))
+    if "sender" in data and "sender_email" not in data:
+        data["sender_email"] = data.get("sender")
+    return PickupCodeRow(**data)
 
 
 def _clear_counts_cache(user_id: UUID) -> None:
@@ -167,6 +183,7 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
         changes["is_archived"] = patch.is_archived
     if patch.pickup_used is not None:
         changes["pickup_used"] = patch.pickup_used
+        changes["pickup_used_at"] = datetime.now(timezone.utc).isoformat() if patch.pickup_used else None
     if not changes:
         return existing
 
@@ -186,6 +203,46 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
     row = await asyncio.to_thread(_update)
     _clear_counts_cache(user_id)
     return _row_to_email(row) if row else None
+
+
+async def list_pickup_codes(
+    user_id: UUID,
+    used: bool,
+    include_expired: bool = False,
+) -> list[PickupCodeRow]:
+    today = date.today().isoformat()
+
+    def _fetch() -> list[dict[str, Any]]:
+        q = (
+            get_service_client()
+            .table("emails")
+            .select(
+                "id,pickup_code,pickup_expiry,pickup_used_at,retailer,locker_location,"
+                "sender,subject,received_at,connected_accounts!inner(user_id)"
+            )
+            .eq("connected_accounts.user_id", str(user_id))
+            .eq("is_pickup_code", True)
+            .not_("pickup_code", "is", "null")
+            .eq("pickup_used", used)
+        )
+        if not include_expired:
+            q = q.or_(f"pickup_expiry.is.null,pickup_expiry.gte.{today}")
+        return q.order("pickup_code", desc=False).order("received_at", desc=True).execute().data or []
+
+    rows = await asyncio.to_thread(_fetch)
+    deduped: list[PickupCodeRow] = []
+    seen_codes: set[str] = set()
+    for row in rows:
+        code = row.get("pickup_code")
+        if not code or code in seen_codes:
+            continue
+        if not include_expired:
+            expiry = row.get("pickup_expiry")
+            if expiry is not None and expiry < today:
+                continue
+        seen_codes.add(code)
+        deduped.append(_row_to_pickup_code(row))
+    return deduped
 
 
 async def get_email_counts(user_id: UUID) -> EmailCounts:

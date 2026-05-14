@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmailDetailPanel } from "@/components/inbox/email-detail-panel";
@@ -26,7 +26,7 @@ function tabFromParam(value: string | null): "all" | TriageCategory {
   return "all";
 }
 
-export default function InboxPage() {
+function InboxPageContent() {
   const searchParams = useSearchParams();
   const tab = tabFromParam(searchParams.get("tab"));
   const q = searchParams.get("q") ?? "";
@@ -139,5 +139,13 @@ export default function InboxPage() {
         onArchive={archiveEmail}
       />
     </div>
+  );
+}
+
+export default function InboxPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading inbox...</div>}>
+      <InboxPageContent />
+    </Suspense>
   );
 }

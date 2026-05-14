@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import accounts, auth, digest, emails, triage, users
+from app.routers import accounts, auth, digest, emails, pickup, triage, users
 from app.tasks.ai_worker import run_forever as run_ai_worker
 from app.tasks.scheduler import make_scheduler
 
@@ -62,6 +62,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(accounts.router)
 app.include_router(emails.router)
+app.include_router(pickup.router)
 app.include_router(triage.router)
 app.include_router(digest.router)
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -36,7 +36,7 @@ function toastForResult(connected: string, reason: string | null) {
   }
 }
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
@@ -151,5 +151,13 @@ export default function SettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </main>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<main className="p-6 text-sm text-muted-foreground">Loading settings...</main>}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }
