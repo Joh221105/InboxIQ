@@ -24,7 +24,7 @@ from app.services.triage import TriageResult
 _COUNTS_CACHE_TTL = timedelta(seconds=30)
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
 
-_EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)"
+_EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags!contact_tag_id(tag,custom_label,color)"
 
 
 def _cursor_encode(received_at: datetime, email_id: UUID) -> str:

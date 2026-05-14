@@ -48,7 +48,7 @@ export function SearchBar({
         ref={inputRef}
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder="Search keyword or sender"
+        placeholder={bySender ? "Filter by sender name or email" : "Search keyword or sender"}
         aria-label="Search emails"
         className="max-w-md"
         disabled={isPending}
