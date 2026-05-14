@@ -128,6 +128,9 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         if filters.search:
             q = q.filter("search_tsv", "plfts(english)", filters.search)
 
+        if filters.sender_search:
+            q = q.ilike("sender", f"%{filters.sender_search}%")
+
         if filters.has_deadline:
             q = q.not_("deadline_extracted", "is", "null")
 

@@ -78,7 +78,7 @@ class EmailFilters(BaseModel):
     is_archived: bool = False
     since: datetime | None = None
     search: str | None = None
-    sender_search: str | None = None  # wired to ilike filter in db/emails.py (Fix E)
+    sender_search: str | None = None
     has_deadline: bool = False
     deadline_after: date | None = None
     deadline_before: date | None = None
