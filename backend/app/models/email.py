@@ -1,7 +1,7 @@
 # backend/app/models/email.py
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -70,6 +70,10 @@ class EmailFilters(BaseModel):
     is_archived: bool = False
     since: datetime | None = None
     search: str | None = None
+    has_deadline: bool = False
+    deadline_after: date | None = None
+    deadline_before: date | None = None
+    order: Literal["received_desc", "deadline_asc"] = "received_desc"
     cursor: str | None = None
     limit: int = 50
 

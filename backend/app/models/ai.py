@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -49,8 +49,10 @@ class DigestResponse(BaseModel):
 
 
 class Digest(BaseModel):
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     items: list[DigestItem] = Field(default_factory=list)
     degraded: bool = False
+    context: str = "Daily"
 
 
 class StoredDigest(BaseModel):

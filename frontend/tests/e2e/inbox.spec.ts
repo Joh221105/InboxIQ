@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.use({ storageState: "frontend/tests/e2e/storage-state.json" });
+test.use({ storageState: "tests/e2e/storage-state.json" });
 
 test("unified inbox happy path", async ({ page }) => {
   await page.goto("/inbox");

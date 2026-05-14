@@ -125,6 +125,30 @@ def test_list_emails_all_tab_uses_priority_order_flag(authed_client: TestClient)
     assert call_filters.triage_category is None
 
 
+def test_list_emails_passes_deadline_filters(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get(
+            "/emails?has_deadline=true&deadline_after=2026-05-14&deadline_before=2026-05-21"
+        )
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.has_deadline is True
+    assert call_filters.deadline_after.isoformat() == "2026-05-14"
+    assert call_filters.deadline_before.isoformat() == "2026-05-21"
+
+
+def test_list_emails_passes_deadline_ascending_order(authed_client: TestClient) -> None:
+    page = EmailListPage(items=[], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get("/emails?order=deadline_asc")
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.order == "deadline_asc"
+
+
 def test_email_counts_returns_counts(authed_client: TestClient) -> None:
     counts = EmailCounts(all=4, action_required=1, worth_reading=2, auto_archive=1)
     with patch("app.routers.emails.get_email_counts", new_callable=AsyncMock, return_value=counts) as mock_counts:

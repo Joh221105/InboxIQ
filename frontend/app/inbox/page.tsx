@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmailDetailPanel } from "@/components/inbox/email-detail-panel";
@@ -30,6 +30,7 @@ function InboxPageContent() {
   const searchParams = useSearchParams();
   const tab = tabFromParam(searchParams.get("tab"));
   const q = searchParams.get("q") ?? "";
+  const deepLinkedEmailId = searchParams.get("email_id");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -45,6 +46,13 @@ function InboxPageContent() {
   );
   const selectedEmail = emails.find((email) => email.id === selectedId) ?? null;
   const hasUnprocessed = emails.some((email) => email.ai_processed === false);
+
+  useEffect(() => {
+    if (!deepLinkedEmailId) return;
+    if (!emails.some((email) => email.id === deepLinkedEmailId)) return;
+    setSelectedId(deepLinkedEmailId);
+    setPanelOpen(true);
+  }, [deepLinkedEmailId, emails]);
 
   function selectEmail(email: Email) {
     setSelectedId(email.id);

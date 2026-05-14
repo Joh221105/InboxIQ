@@ -1,31 +1,33 @@
-# Current Session - Issue 5 Package Tracker
+# Current Session - Issue 6 Dashboard & Daily Digest
 
-- Branch: `issue-5-package-tracker`
-- Implemented backend pickup-code listing:
-  - `GET /pickup-codes?used=false&include_expired=false`
-  - authenticated user scoping through `connected_accounts`
-  - pickup-code dedupe by code, keeping newest email
-  - used-state and expiry filtering
-  - `pickup_used_at` migration/timestamp for used-code history text
-- Implemented package tracker frontend:
-  - minimalist inline retailer SVG logos and `RetailerLogo`
-  - active pickup-code cards with large non-wrapping monospace code
-  - expiry warning badge states, including within-24h red pulse
-  - mark-as-used mutation that archives the source email, removes active card optimistically, and rolls back on error
-  - used-code accordion with lazy query and optimistic cache seeding
-  - `/packages` grid, active count badge, show-expired switch, empty state
+- Branch: `issue-6-dashboard`
+- Implemented backend `/emails` deadline filtering and ordering:
+  - `has_deadline=true`
+  - `deadline_after=YYYY-MM-DD`
+  - `deadline_before=YYYY-MM-DD`
+  - `order=deadline_asc` with deadline ascending and received date descending
+- Confirmed and extended `/digest/today` response shape:
+  - `{ generated_at, items, degraded, context }`
+  - empty digest returns `{ degraded: false, items: [] }`
+- Implemented dashboard frontend:
+  - context switcher pills with optimistic context updates and retriage polling
+  - daily digest banner with calm empty state, degraded fallback note, deadline pills, and inbox deep links
+  - upcoming deadlines panel using the new `/emails` filters
+  - pickup codes strip reusing active pickup-code data
+  - zero-account empty dashboard linking to settings
+  - `/inbox?email_id=...` opens the matching detail panel when loaded
 - Added tests:
-  - `backend/tests/db/test_pickup_dedup.py`
-  - `backend/tests/routers/test_pickup.py`
-  - `frontend/tests/packages/PickupCodeCard.test.tsx`
-  - `frontend/tests/packages/RetailerLogo.test.tsx`
-  - `frontend/tests/e2e/packages.spec.ts`
+  - backend email router deadline filters/order coverage
+  - digest service context-shape-safe tests
+  - dashboard digest banner component tests
+  - context switch mutation polling/rollback tests
+  - dashboard Playwright happy path
 - Screenshot:
-  - `plans/issue-5-screenshot.png`
+  - `plans/issue-6-screenshot.png`
 
 Verification run:
 
-- `cd backend && pytest` -> 128 passed, 1 skipped
-- `cd frontend && npm test` -> 30 passed
-- `cd frontend && npx playwright test tests/e2e/packages.spec.ts` -> 1 passed
+- `cd backend && pytest` -> 130 passed, 1 skipped
+- `cd frontend && npm test` -> 36 passed
 - `cd frontend && npm run build` -> passed
+- `cd frontend && npx playwright test tests/e2e/dashboard.spec.ts` -> 1 passed

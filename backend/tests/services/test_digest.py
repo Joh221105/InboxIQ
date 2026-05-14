@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.models.email import Email
+from app.models.user import User
 from app.services.openai_client import AIServiceUnavailable
 
 
@@ -20,6 +21,15 @@ def _email(subject: str, deadline: str | None = None) -> Email:
         sender="sender@example.com",
         deadline_extracted=deadline,
         received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+    )
+
+
+def _user(user_id=None) -> User:
+    return User(
+        id=user_id or uuid4(),
+        email="user@example.com",
+        default_context="Daily",
         created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
     )
 
@@ -38,6 +48,7 @@ async def test_generate_daily_digest_returns_ai_items_when_successful() -> None:
     response = DigestResponse(items=[item])
 
     with (
+        patch("app.services.digest.get_user", new=AsyncMock(return_value=_user())),
         patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[action_email])),
         patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[])),
         patch("app.services.digest.call_json", new=AsyncMock(return_value=response)),
@@ -56,6 +67,7 @@ async def test_generate_daily_digest_returns_empty_when_no_emails() -> None:
 
     call_json = AsyncMock()
     with (
+        patch("app.services.digest.get_user", new=AsyncMock(return_value=_user())),
         patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[])),
         patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[])),
         patch("app.services.digest.call_json", call_json),
@@ -73,6 +85,7 @@ async def test_digest_degraded_fallback_includes_upcoming_deadlines() -> None:
 
     deadline_email = _email("Tuition deposit due", "2026-05-18")
     with (
+        patch("app.services.digest.get_user", new=AsyncMock(return_value=_user())),
         patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[])),
         patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[deadline_email])),
         patch("app.services.digest.call_json", new=AsyncMock(side_effect=AIServiceUnavailable("down"))),

@@ -1,6 +1,8 @@
 # backend/app/routers/emails.py
 from __future__ import annotations
 
+from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,11 +23,13 @@ async def get_emails(
     is_archived: bool = Query(default=False),
     since: str | None = Query(default=None),
     search: str | None = Query(default=None),
+    has_deadline: bool = Query(default=False),
+    deadline_after: date | None = Query(default=None),
+    deadline_before: date | None = Query(default=None),
+    order: Literal["received_desc", "deadline_asc"] = Query(default="received_desc"),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> EmailListPage:
-    from datetime import datetime
-
     filters = EmailFilters(
         user_id=claims.user_id,
         account_id=account_id,  # type: ignore[arg-type]
@@ -33,6 +37,10 @@ async def get_emails(
         is_archived=is_archived,
         since=datetime.fromisoformat(since) if since else None,
         search=search,
+        has_deadline=has_deadline,
+        deadline_after=deadline_after,
+        deadline_before=deadline_before,
+        order=order,
         cursor=cursor,
         limit=limit,
     )

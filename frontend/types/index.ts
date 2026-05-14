@@ -57,6 +57,20 @@ export type EmailBody = {
   body_html: string;
 };
 
+export type DigestItem = {
+  summary: string;
+  source_email_id: string;
+  deadline: string | null;
+  sender: string;
+};
+
+export type Digest = {
+  generated_at: string;
+  items: DigestItem[];
+  degraded: boolean;
+  context: User["default_context"] | string;
+};
+
 export type PickupCode = {
   email_id: string;
   pickup_code: string;

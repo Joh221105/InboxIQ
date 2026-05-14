@@ -9,6 +9,7 @@ from app.db.emails import (
     list_upcoming_deadlines,
     upsert_digest,
 )
+from app.db.users import get_user
 from app.models.ai import Digest, DigestItem, DigestResponse
 from app.models.email import Email
 from app.prompts.digest import DIGEST_PROMPT
@@ -47,11 +48,12 @@ def format_digest_input(actions: list[Email], deadlines: list[Email]) -> str:
 
 
 async def generate_daily_digest(user_id: UUID) -> Digest:
+    user = await get_user(user_id)
     actions = await list_action_required_recent(user_id, hours=24)
     deadlines = await list_upcoming_deadlines(user_id, days=7)
 
     if not actions and not deadlines:
-        return Digest(items=[], degraded=False)
+        return Digest(items=[], degraded=False, context=user.default_context)
 
     user_msg = format_digest_input(actions, deadlines)
     try:
@@ -62,18 +64,21 @@ async def generate_daily_digest(user_id: UUID) -> Digest:
             kind="digest",
             user_id=user_id,
         )
-        return Digest(items=resp.items, degraded=False)
+        return Digest(items=resp.items, degraded=False, context=user.default_context)
     except (AIInvalidResponse, AIServiceUnavailable):
         fallback_source = (actions + [email for email in deadlines if email not in actions])[:3]
         fallback = [_digest_item_from_email(email) for email in fallback_source]
-        return Digest(items=fallback, degraded=True)
+        return Digest(items=fallback, degraded=True, context=user.default_context)
 
 
 async def get_or_create_today_digest(user_id: UUID) -> Digest:
     today = date.today()
     cached = await get_digest(user_id, today)
     if cached and (datetime.now(timezone.utc) - cached.generated_at).total_seconds() < 3600:
-        return cached.payload
+        user = await get_user(user_id)
+        return cached.payload.model_copy(
+            update={"generated_at": cached.generated_at, "context": user.default_context}
+        )
     digest = await generate_daily_digest(user_id)
     await upsert_digest(user_id, today, digest)
     return digest

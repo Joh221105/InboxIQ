@@ -112,11 +112,22 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         if filters.search:
             q = q.filter("search_tsv", "plfts(english)", filters.search)
 
+        if filters.has_deadline:
+            q = q.not_("deadline_extracted", "is", "null")
+
+        if filters.deadline_after:
+            q = q.gte("deadline_extracted", filters.deadline_after.isoformat())
+
+        if filters.deadline_before:
+            q = q.lte("deadline_extracted", filters.deadline_before.isoformat())
+
         if filters.cursor:
             rt, eid = _cursor_decode(filters.cursor)
             q = q.or_(f"received_at.lt.{rt},and(received_at.eq.{rt},id.lt.{eid})")
 
-        if filters.triage_category:
+        if filters.order == "deadline_asc":
+            q = q.order("deadline_extracted", desc=False, nullsfirst=False).order("received_at", desc=True)
+        elif filters.triage_category:
             q = q.order("received_at", desc=True).order("id", desc=True)
         else:
             # Supabase/PostgREST cannot express CASE ordering directly here.
@@ -126,7 +137,7 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         return q.execute().data or []
 
     rows = await asyncio.to_thread(_fetch)
-    if not filters.triage_category:
+    if not filters.triage_category and filters.order == "received_desc":
         priority = {
             "action_required": 1,
             "worth_reading": 2,
