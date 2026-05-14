@@ -317,3 +317,113 @@ python backend/scripts/print_migrations.py
 ```
 
 To apply migrations, paste the output into the **Supabase SQL Editor** for your project, or run it against your local Postgres instance.
+
+---
+
+## Production URLs
+
+Set these after Vercel and Railway finish deploying:
+
+| Surface | URL |
+| ------- | --- |
+| Frontend | `https://<vercel-url>` |
+| Backend API | `https://<railway-url>` |
+| Healthcheck | `https://<railway-url>/health` |
+
+Run the production smoke test with:
+
+```bash
+API_URL=https://<railway-url> FRONTEND_URL=https://<vercel-url> ./scripts/smoke.sh
+```
+
+## Demo Prerequisites
+
+Use a fresh Gmail account dedicated to the demo. Stage the mailbox before connecting it to InboxIQ:
+
+- 1 interview invite or recruiter scheduling email with a clear reply deadline.
+- 1 Amazon Locker or pickup-code email.
+- 1 email from a sender that will be tagged as Professor, Friend, Recruiter, or a custom contact.
+- 30 miscellaneous emails: newsletters, receipts, account updates, shipping notices, and low-priority promotions.
+
+For graders and demo viewers: Google may show a "Google hasn't verified this app" warning while the OAuth consent screen is in Testing mode. This is expected for a class project. Click **Advanced** then **Continue** with a test-user email.
+
+## Production Setup Checklist
+
+### Vercel
+
+- Create a new project from the `frontend/` root.
+- Framework preset: Next.js.
+- Environment variables:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `NEXT_PUBLIC_API_URL=https://<railway-url>`
+  - `NEXT_PUBLIC_SENTRY_DSN` optional
+- Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel.
+
+### Railway
+
+- Create a new service from the `backend/` root.
+- Start command comes from `backend/Procfile`.
+- Runtime is pinned by `backend/runtime.txt`.
+- Environment variables:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_ANON_KEY`
+  - `SUPABASE_JWT_SECRET` only for legacy HS256 tokens, otherwise blank
+  - `GMAIL_CLIENT_ID`
+  - `GMAIL_CLIENT_SECRET`
+  - `GMAIL_REDIRECT_URI=https://<railway-url>/auth/gmail/callback`
+  - `OAUTH_STATE_SECRET` random 32+ character string
+  - `OPENAI_API_KEY`
+  - `FRONTEND_URL=https://<vercel-url>`
+  - `ALLOWED_ORIGINS=https://<vercel-url>,http://localhost:3000`
+  - `ENVIRONMENT=production`
+  - `LOG_LEVEL=info`
+  - `GIT_SHA` set from `$RAILWAY_GIT_COMMIT_SHA` in the build/deploy environment
+  - `SENTRY_DSN` optional
+
+### Google Cloud Console
+
+- OAuth 2.0 Client -> Authorized redirect URIs:
+  - `https://<railway-url>/auth/gmail/callback`
+  - keep `http://localhost:8000/auth/gmail/callback` for development
+- OAuth consent screen:
+  - Testing mode is acceptable for this class project.
+  - Add demo viewer Gmail addresses to the **Test users** list.
+
+### Supabase
+
+- Apply all migrations in `backend/supabase/migrations/` to the production project, currently `001` through `014`.
+- Authentication -> URL Configuration:
+  - Site URL: `https://<vercel-url>`
+  - Redirect URLs:
+    - `https://<vercel-url>/auth/callback`
+    - `http://localhost:3000/auth/callback`
+
+## Production Verification
+
+After deployment:
+
+1. Run `scripts/smoke.sh` against production and confirm it passes.
+2. Run `backend/supabase/tests/test_rls.sql` in the production Supabase SQL editor and confirm all adversarial checks fail correctly.
+3. Open production frontend in an incognito browser.
+4. Sign in with a magic link and confirm it redirects to the production URL, not localhost.
+5. Connect Gmail and confirm the OAuth callback redirects to `/settings` with the success toast.
+6. Trigger `POST /accounts/{id}/sync` and confirm at least 10 emails appear in `/inbox`.
+7. Wait 60-90 seconds for the AI worker and confirm triage badges and summaries appear.
+8. Switch context from Daily to Job Hunting and confirm retriage updates the inbox.
+9. Visit `/packages` and confirm pickup codes appear when present in the mailbox.
+10. Visit `/contacts`, add a tag, then confirm the badge appears in `/inbox`.
+11. Visit `/` and confirm the digest, deadlines, and pickup strip render.
+12. Open DevTools Console on every page and confirm zero red errors.
+13. Sign out and confirm protected routes redirect to `/auth/sign-in`.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| ------- | --- |
+| Magic link redirects to localhost | Update Supabase Authentication -> URL Configuration so the Site URL and Redirect URLs point at Vercel. |
+| OAuth callback `redirect_uri_mismatch` | In Google Cloud Console, make the authorized redirect URI exactly match `GMAIL_REDIRECT_URI`. |
+| 401 on every API call | Check frontend `NEXT_PUBLIC_API_URL` and backend `ALLOWED_ORIGINS`; both must reference the production frontend/backend URLs exactly. |
+| AI processing stuck | Check `OPENAI_API_KEY`, inspect `ai_usage` for recent activity, then check `ai_attempts` on stuck emails. |
+| Scheduler not running | Railway must run a continuous service, not a cron-only job; confirm the worker process is live. |

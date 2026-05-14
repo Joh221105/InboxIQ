@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -11,29 +10,44 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import accounts, auth, digest, emails, pickup, triage, users
+from app.core.logging_middleware import (
+    config_presence_summary,
+    request_logging_middleware,
+)
+from app.routers import accounts, auth, contacts, digest, emails, pickup, triage, users
 from app.tasks.ai_worker import run_forever as run_ai_worker
 from app.tasks.scheduler import make_scheduler
 
 logger = logging.getLogger(__name__)
 
-_REQUIRED_ENV_VARS = [
-    "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_ANON_KEY",
-    "GMAIL_CLIENT_ID",
-    "GMAIL_CLIENT_SECRET",
-    "GMAIL_REDIRECT_URI",
-    "OAUTH_STATE_SECRET",
-    "OPENAI_API_KEY",
-    "FRONTEND_URL",
-]
+logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+
+
+def _init_sentry() -> None:
+    if not settings.sentry_dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+    except ImportError:
+        logger.warning("sentry dsn configured but sentry-sdk is not installed")
+        return
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=settings.git_sha,
+        traces_sample_rate=0.1,
+        integrations=[FastApiIntegration()],
+    )
+
+
+_init_sentry()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    for var in _REQUIRED_ENV_VARS:
-        logger.info("env %s present=%s", var, bool(os.getenv(var)))
+    logger.info("config loaded", extra=config_presence_summary(settings))
     scheduler = make_scheduler()
     scheduler.start()
     ai_worker_task = asyncio.create_task(run_ai_worker())
@@ -50,6 +64,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="InboxIQ API", version="0.1.0", lifespan=lifespan)
 
+app.middleware("http")(request_logging_middleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -65,6 +81,7 @@ app.include_router(emails.router)
 app.include_router(pickup.router)
 app.include_router(triage.router)
 app.include_router(digest.router)
+app.include_router(contacts.router)
 
 
 async def _probe_supabase() -> str:

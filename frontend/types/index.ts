@@ -87,10 +87,34 @@ export type PickupCodeList = {
   items: PickupCode[];
 };
 
+export type TagType = "professor" | "friend" | "recruiter" | "custom";
+
 export type ContactTag = {
   id: string;
   user_id: string;
-  email: string;
-  tag: string;
+  identifier: string;
+  tag: TagType;
+  custom_label: string | null;
+  color: string;
   created_at: string;
+};
+
+export type ContactsGrouped = {
+  professor: ContactTag[];
+  friend: ContactTag[];
+  recruiter: ContactTag[];
+  custom: ContactTag[];
+};
+
+export type CreateContactRequest = {
+  identifier: string;
+  tag: TagType;
+  custom_label?: string;
+  color?: string;
+};
+
+export type CreateContactResponse = {
+  tag: ContactTag;
+  retroactive_count: number;
+  job_id: string | null;
 };
