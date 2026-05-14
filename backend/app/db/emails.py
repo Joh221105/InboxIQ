@@ -9,6 +9,7 @@ from uuid import UUID
 
 from app.db.supabase import get_service_client
 from app.models.email import (
+    ContactTagInfo,
     Email,
     EmailCounts,
     EmailFilters,
@@ -35,10 +36,18 @@ def _cursor_decode(cursor: str) -> tuple[str, str]:
     return rt, eid
 
 
+def _build_contact_tag(row_tag: dict | None) -> ContactTagInfo | None:
+    if not row_tag:
+        return None
+    label = row_tag.get("custom_label") or row_tag["tag"].capitalize()
+    return ContactTagInfo(label=label, color=row_tag["color"])
+
+
 def _row_to_email(row: dict[str, Any]) -> Email:
     nested = row.pop("connected_accounts", None) or {}
     account_color = nested.get("color") if isinstance(nested, dict) else None
     account_email = nested.get("email_address") if isinstance(nested, dict) else None
+    raw_tag = row.pop("contact_tags", None)
     if "ai_category" in row and "triage_category" not in row:
         row["triage_category"] = row.get("ai_category")
     if "sender" in row and "sender_email" not in row:
@@ -46,7 +55,12 @@ def _row_to_email(row: dict[str, Any]) -> Email:
     raw_items = row.get("action_items")
     if raw_items is None:
         row["action_items"] = []
-    return Email(**row, account_color=account_color, account_email=account_email)
+    return Email(
+        **row,
+        account_color=account_color,
+        account_email=account_email,
+        contact_tag=_build_contact_tag(raw_tag),
+    )
 
 
 def _row_to_pickup_code(row: dict[str, Any]) -> PickupCodeRow:
@@ -95,7 +109,7 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         q = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .eq("user_id", str(filters.user_id))
             .eq("is_archived", filters.is_archived)
         )
@@ -170,7 +184,7 @@ async def get_email(email_id: UUID, user_id: UUID) -> Email | None:
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .eq("id", str(email_id))
             .eq("user_id", str(user_id))
             .maybe_single()
@@ -205,7 +219,7 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
             .update(changes)
             .eq("id", str(email_id))
             .eq("user_id", str(user_id))
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .maybe_single()
             .execute()
         )
@@ -344,7 +358,7 @@ async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .eq("ai_processed", False)
             .or_(f"last_ai_attempt_at.is.null,last_ai_attempt_at.lt.{cutoff.isoformat()}")
             .order("received_at", desc=True)
@@ -362,7 +376,7 @@ async def list_emails_for_retriage(user_id: UUID, limit: int = 100) -> list[Emai
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .eq("user_id", str(user_id))
             .eq("is_read", False)
             .eq("is_archived", False)
@@ -402,7 +416,7 @@ async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Em
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .eq("user_id", str(user_id))
             .eq("ai_category", "action_required")
             .gte("received_at", since.isoformat())
@@ -423,7 +437,7 @@ async def list_upcoming_deadlines(user_id: UUID, days: int = 7) -> list[Email]:
         result = (
             get_service_client()
             .table("emails")
-            .select("*, connected_accounts(color,email_address)")
+            .select("*, connected_accounts(color,email_address), contact_tags(tag,custom_label,color)")
             .eq("user_id", str(user_id))
             .gte("deadline_extracted", today.isoformat())
             .lte("deadline_extracted", end.isoformat())
