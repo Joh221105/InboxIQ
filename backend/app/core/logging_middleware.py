@@ -17,9 +17,6 @@ logger = logging.getLogger(__name__)
 def config_presence_summary(settings: BaseSettings) -> dict[str, bool]:
     return {
         "supabase_set": bool(getattr(settings, "supabase_url", "")),
-        "supabase_service_role_set": bool(
-            getattr(settings, "supabase_service_role_key", "")
-        ),
         "supabase_anon_set": bool(getattr(settings, "supabase_anon_key", "")),
         "supabase_jwt_secret_set": bool(
             getattr(settings, "supabase_jwt_secret", "")

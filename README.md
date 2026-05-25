@@ -293,7 +293,7 @@ GMAIL_CLIENT_ID=
 GMAIL_CLIENT_SECRET=
 GMAIL_REDIRECT_URI=
 FRONTEND_URL=
-# OPENAI_API_KEY=   # optional until AI features ship
+OPENAI_API_KEY=<openai_api_key>
 ```
 
 The API verifies browser sessions by reading the JWT `alg` header: **ES256/RS256** tokens are checked against Supabase JWKS (`/auth/v1/.well-known/jwks.json`); **HS256** tokens still use `SUPABASE_JWT_SECRET`.
@@ -393,7 +393,7 @@ For graders and demo viewers: Google may show a "Google hasn't verified this app
 
 ### Supabase
 
-- Apply all migrations in `backend/supabase/migrations/` to the production project, currently `001` through `014`.
+- Apply all migrations in `backend/supabase/migrations/` to the production project, currently `001` through `016`.
 - Authentication -> URL Configuration:
   - Site URL: `https://<vercel-url>`
   - Redirect URLs:

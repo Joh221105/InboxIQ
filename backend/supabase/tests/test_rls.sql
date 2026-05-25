@@ -23,8 +23,8 @@ SELECT * FROM public.contact_tags
 WHERE user_id = '<user_b_id>';
 
 -- 5. Cannot insert a contact tag on behalf of another user
-INSERT INTO public.contact_tags (user_id, email, tag)
-VALUES ('<user_b_id>', 'victim@example.com', 'injected-tag')
+INSERT INTO public.contact_tags (user_id, identifier, tag, color)
+VALUES ('<user_b_id>', 'victim@example.com', 'friend', '#6b7280')
 RETURNING id;
 
 -- 6. Cannot update another user's profile

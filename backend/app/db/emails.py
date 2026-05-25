@@ -214,6 +214,8 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
     if patch.pickup_used is not None:
         changes["pickup_used"] = patch.pickup_used
         changes["pickup_used_at"] = datetime.now(timezone.utc).isoformat() if patch.pickup_used else None
+        if patch.pickup_used:
+            changes["is_archived"] = True
     if not changes:
         return existing
 
@@ -345,8 +347,7 @@ async def mark_ai_failed(email_id: UUID) -> int:
         if attempts >= 3:
             changes.update(
                 {
-                    "ai_processed": True,
-                    "ai_category": "worth_reading",
+                    "ai_processed": False,
                     "ai_summary": "(AI unavailable)",
                 }
             )

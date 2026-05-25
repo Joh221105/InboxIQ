@@ -1,11 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { apiFetch } from "@/lib/api";
-import type { ContactTag, ContactsGrouped, CreateContactRequest, CreateContactResponse } from "@/types";
+import type { ContactsGrouped, CreateContactRequest, CreateContactResponse } from "@/types";
 
 export function useContacts() {
   return useQuery({

@@ -24,6 +24,12 @@ def test_config_presence_summary_uses_booleans_only() -> None:
     assert all(isinstance(value, bool) for value in summary.values())
 
 
+def test_config_presence_summary_omits_service_role_key_status() -> None:
+    summary = config_presence_summary(settings)
+
+    assert "supabase_service_role_set" not in summary
+
+
 @pytest.mark.asyncio
 async def test_resolve_log_user_id_returns_valid_bearer_claim(
     monkeypatch: pytest.MonkeyPatch,
