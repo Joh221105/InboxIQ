@@ -1,22 +1,41 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { AddContactDialog } from "@/components/contacts/AddContactDialog";
 import { TagSection } from "@/components/contacts/TagSection";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useContacts } from "@/lib/queries/contacts";
+import { useContactEmailHistory, useContacts } from "@/lib/queries/contacts";
+import type { ContactTag } from "@/types";
 
-export default function ContactsPage() {
+function allTags(data: ReturnType<typeof useContacts>["data"]): ContactTag[] {
+  if (!data) return [];
+  return [...data.professor, ...data.recruiter, ...data.friend, ...data.custom];
+}
+
+function ContactsPageContent() {
   const contacts = useContacts();
+  const searchParams = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedTag, setSelectedTag] = useState<ContactTag | null>(null);
 
   const data = contacts.data;
+  const tags = useMemo(() => allTags(data), [data]);
   const totalTags = data
     ? data.professor.length + data.friend.length + data.recruiter.length + data.custom.length
     : 0;
+  const history = useContactEmailHistory(selectedTag?.id ?? null);
+
+  useEffect(() => {
+    const identifier = searchParams.get("identifier");
+    if (!identifier || tags.length === 0) return;
+    const normalized = identifier.toLowerCase();
+    const match = tags.find((tag) => tag.identifier.toLowerCase() === normalized);
+    if (match) setSelectedTag(match);
+  }, [searchParams, tags]);
 
   return (
     <main className="max-w-2xl space-y-6 p-6">
@@ -62,12 +81,67 @@ export default function ContactsPage() {
         </section>
       ) : (
         <div className="space-y-6">
-          <TagSection type="professor" tags={data!.professor} />
-          <TagSection type="recruiter" tags={data!.recruiter} />
-          <TagSection type="friend" tags={data!.friend} />
-          <TagSection type="custom" tags={data!.custom} />
+          <TagSection
+            type="professor"
+            tags={data!.professor}
+            selectedId={selectedTag?.id ?? null}
+            onSelect={setSelectedTag}
+          />
+          <TagSection
+            type="recruiter"
+            tags={data!.recruiter}
+            selectedId={selectedTag?.id ?? null}
+            onSelect={setSelectedTag}
+          />
+          <TagSection
+            type="friend"
+            tags={data!.friend}
+            selectedId={selectedTag?.id ?? null}
+            onSelect={setSelectedTag}
+          />
+          <TagSection
+            type="custom"
+            tags={data!.custom}
+            selectedId={selectedTag?.id ?? null}
+            onSelect={setSelectedTag}
+          />
         </div>
       )}
+
+      {selectedTag ? (
+        <section className="space-y-3 rounded-lg border p-4">
+          <div>
+            <h2 className="text-sm font-semibold">Email history</h2>
+            <p className="text-sm text-muted-foreground">{selectedTag.identifier}</p>
+          </div>
+          {history.isLoading ? (
+            <Skeleton className="h-20 w-full rounded-md" />
+          ) : history.data?.items.length ? (
+            <ul className="divide-y rounded-md border">
+              {history.data.items.slice(0, 10).map((email) => (
+                <li key={email.id} className="px-3 py-2 text-sm">
+                  <div className="truncate font-medium">{email.subject ?? "(no subject)"}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {email.sender ?? "(unknown sender)"}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              No matching email history yet.
+            </p>
+          )}
+        </section>
+      ) : null}
     </main>
+  );
+}
+
+export default function ContactsPage() {
+  return (
+    <Suspense fallback={<main className="p-6 text-sm text-muted-foreground">Loading contacts...</main>}>
+      <ContactsPageContent />
+    </Suspense>
   );
 }

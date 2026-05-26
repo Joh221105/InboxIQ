@@ -20,33 +20,26 @@ type JobStatus = {
   total: number;
 };
 
+async function pollJobUntilDone(jobId: string): Promise<JobStatus["status"]> {
+  const maxPolls = 60;
+  const pollIntervalMs = 2000;
+
+  for (let i = 0; i < maxPolls; i += 1) {
+    if (i > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, pollIntervalMs));
+    }
+    try {
+      const job = await apiFetch<JobStatus>(`/jobs/${jobId}`);
+      if (job.status === "done" || job.status === "failed") return job.status;
+    } catch {
+      return "done";
+    }
+  }
+  return "failed";
+}
+
 export function useUpdateContext() {
   const queryClient = useQueryClient();
-
-  function pollJob(jobId: string, context: ContextValue) {
-    const check = () => {
-      void apiFetch<JobStatus>(`/jobs/${jobId}`)
-        .then((job) => {
-          if (job.status === "running") return;
-          window.clearInterval(timer);
-          if (job.status === "done") {
-            toast.success(`Done - your inbox now reflects ${context}`);
-            void queryClient.invalidateQueries({ queryKey: ["emails"] });
-            void queryClient.invalidateQueries({ queryKey: ["digest"] });
-            void queryClient.invalidateQueries({ queryKey: ["email-counts"] });
-            void queryClient.invalidateQueries({ queryKey: ["emails-counts"] });
-          } else {
-            toast.error("Context switch failed");
-          }
-        })
-        .catch(() => {
-          window.clearInterval(timer);
-          toast.error("Context switch failed");
-        });
-    };
-    const timer = window.setInterval(check, 1500);
-    check();
-  }
 
   return useMutation({
     mutationFn: (context: ContextValue) =>
@@ -65,11 +58,19 @@ export function useUpdateContext() {
       }
       return { previous };
     },
-    onSuccess: (data, context) => {
+    onSuccess: async (data, context) => {
       queryClient.setQueryData(["user-context"], data.user);
-      if (data.job_id) {
+      if (data.job_id && data.total > 0) {
         toast.success("Re-triaging the last 100 emails...");
-        pollJob(data.job_id, context);
+        const status = await pollJobUntilDone(data.job_id);
+        if (status === "done") {
+          await queryClient.invalidateQueries({ queryKey: ["emails"] });
+          await queryClient.invalidateQueries({ queryKey: ["digest"] });
+          await queryClient.invalidateQueries({ queryKey: ["email-counts"] });
+          toast.success(`Done - your inbox now reflects ${context}`);
+        } else {
+          toast.error("Context switch failed");
+        }
       }
     },
     onError: (error, _context, rollback) => {

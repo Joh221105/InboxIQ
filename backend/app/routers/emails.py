@@ -9,8 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import UserClaims, get_current_user
 from app.db.emails import get_email, get_email_counts, list_emails, update_email
-from app.models.email import Email, EmailBodyResponse, EmailCounts, EmailFilters, EmailListPage, EmailUpdate
+from app.models.email import (
+    Email,
+    EmailBodyResponse,
+    EmailCounts,
+    EmailFilters,
+    EmailListPage,
+    EmailUpdate,
+    TriageCategory,
+)
 from app.services.email_body import fetch_email_body_html, sanitize_body_html
+from app.services.gmail_sync import archive_gmail_message
 
 router = APIRouter(prefix="/emails", tags=["emails"])
 
@@ -18,8 +27,9 @@ router = APIRouter(prefix="/emails", tags=["emails"])
 @router.get("")
 async def get_emails(
     claims: UserClaims = Depends(get_current_user),
-    account_id: str | None = Query(default=None),
-    triage_category: str | None = Query(default=None),
+    account_id: UUID | None = Query(default=None),
+    contact_tag_id: UUID | None = Query(default=None),
+    triage_category: TriageCategory | None = Query(default=None),
     is_archived: bool = Query(default=False),
     since: str | None = Query(default=None),
     search: str | None = Query(default=None),
@@ -33,7 +43,8 @@ async def get_emails(
 ) -> EmailListPage:
     filters = EmailFilters(
         user_id=claims.user_id,
-        account_id=account_id,  # type: ignore[arg-type]
+        account_id=account_id,
+        contact_tag_id=contact_tag_id,
         triage_category=triage_category,
         is_archived=is_archived,
         since=datetime.fromisoformat(since) if since else None,
@@ -60,6 +71,11 @@ async def patch_email(
     body: EmailUpdate,
     claims: UserClaims = Depends(get_current_user),
 ) -> Email:
+    if body.pickup_used is True:
+        existing = await get_email(email_id, claims.user_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Email not found")
+        await archive_gmail_message(existing.account_id, existing.gmail_id)
     updated = await update_email(email_id, claims.user_id, body)
     if updated is None:
         raise HTTPException(status_code=404, detail="Email not found")

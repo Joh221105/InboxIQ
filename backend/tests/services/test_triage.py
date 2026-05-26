@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ import pytest
 
 from app.models.ai import ActionItemsResponse, DeadlineResponse, PickupCodeResponse, TriageResponse
 from app.models.email import Email
+from app.services.openai_client import AIInvalidResponse
 
 
 def _email(subject: str = "Interview", body: str = "Please complete by Friday") -> Email:
@@ -29,7 +31,7 @@ async def test_triage_email_empty_body_skips_openai() -> None:
     from app.services.triage import triage_email
 
     call_json = AsyncMock()
-    with patch("app.services.triage.call_json", call_json):
+    with patch("app.services.triage.call_json_with_cost", call_json):
         result = await triage_email(_email(body="   "), "Job Hunting")
 
     assert result.category == "auto_archive"
@@ -44,7 +46,7 @@ async def test_triage_email_none_body_skips_openai() -> None:
     from app.services.triage import triage_email
 
     call_json = AsyncMock()
-    with patch("app.services.triage.call_json", call_json):
+    with patch("app.services.triage.call_json_with_cost", call_json):
         result = await triage_email(_email(body=None), "Job Hunting")
 
     assert result.category == "auto_archive"
@@ -59,18 +61,24 @@ async def test_triage_email_extracts_deadline_when_flagged() -> None:
 
     call_json = AsyncMock(
         side_effect=[
-            TriageResponse(
+            (
+                TriageResponse(
                 category="action_required",
                 summary="Recruiter asks you to complete an OA by Friday.",
                 has_deadline=True,
                 has_action_items=False,
                 is_pickup_code=False,
+                ),
+                Decimal("0.01"),
             ),
-            DeadlineResponse(deadline="2026-05-15", deadline_text="by Friday", confidence="high"),
+            (
+                DeadlineResponse(deadline="2026-05-15", deadline_text="by Friday", confidence="high"),
+                Decimal("0.01"),
+            ),
         ]
     )
 
-    with patch("app.services.triage.call_json", call_json):
+    with patch("app.services.triage.call_json_with_cost", call_json):
         result = await triage_email(_email(), "Job Hunting")
 
     assert call_json.await_count == 2
@@ -83,23 +91,29 @@ async def test_triage_email_pickup_prefilter_runs_pickup_extraction() -> None:
 
     call_json = AsyncMock(
         side_effect=[
-            TriageResponse(
+            (
+                TriageResponse(
                 category="worth_reading",
                 summary="Amazon says your package is ready.",
                 has_deadline=False,
                 has_action_items=False,
                 is_pickup_code=False,
+                ),
+                Decimal("0.01"),
             ),
-            PickupCodeResponse(
+            (
+                PickupCodeResponse(
                 pickup_code="1234 5678",
                 pickup_expiry="2026-05-15",
                 retailer="Amazon",
                 locker_location="Campus Hub",
+                ),
+                Decimal("0.01"),
             ),
         ]
     )
 
-    with patch("app.services.triage.call_json", call_json):
+    with patch("app.services.triage.call_json_with_cost", call_json):
         result = await triage_email(
             _email(subject="Your Amazon Locker pickup code is 1234 5678", body="Ready for pickup"),
             "Shopping",
@@ -116,19 +130,22 @@ async def test_triage_email_does_not_persist_pickup_flag_without_code() -> None:
 
     call_json = AsyncMock(
         side_effect=[
-            TriageResponse(
+            (
+                TriageResponse(
                 category="action_required",
                 summary="Package is ready for pickup.",
                 has_deadline=False,
                 has_action_items=True,
                 is_pickup_code=True,
+                ),
+                Decimal("0.01"),
             ),
-            ActionItemsResponse(action_items=["Pick up package"]),
-            PickupCodeResponse(),
+            (ActionItemsResponse(action_items=["Pick up package"]), Decimal("0.01")),
+            (PickupCodeResponse(), Decimal("0.01")),
         ]
     )
 
-    with patch("app.services.triage.call_json", call_json):
+    with patch("app.services.triage.call_json_with_cost", call_json):
         result = await triage_email(
             _email(subject="Ready for pickup", body="Your package is ready but no code is shown."),
             "Shopping",
@@ -144,19 +161,47 @@ async def test_triage_email_extracts_action_items_when_flagged() -> None:
 
     call_json = AsyncMock(
         side_effect=[
-            TriageResponse(
+            (
+                TriageResponse(
                 category="action_required",
                 summary="School requests your transcript.",
                 has_deadline=False,
                 has_action_items=True,
                 is_pickup_code=False,
+                ),
+                Decimal("0.01"),
             ),
-            ActionItemsResponse(action_items=["Upload transcript"]),
+            (ActionItemsResponse(action_items=["Upload transcript"]), Decimal("0.01")),
         ]
     )
 
-    with patch("app.services.triage.call_json", call_json):
+    with patch("app.services.triage.call_json_with_cost", call_json):
         result = await triage_email(_email(body="Please upload your transcript."), "School Application")
 
     assert call_json.await_count == 2
     assert result.action_items == ["Upload transcript"]
+
+
+@pytest.mark.asyncio
+async def test_triage_email_raises_when_extraction_fails_so_worker_retries() -> None:
+    from app.services.triage import triage_email
+
+    call_json = AsyncMock(
+        side_effect=[
+            (
+                TriageResponse(
+                    category="action_required",
+                    summary="School requests your transcript.",
+                    has_deadline=False,
+                    has_action_items=True,
+                    is_pickup_code=False,
+                ),
+                Decimal("0.01"),
+            ),
+            AIInvalidResponse("bad action item response"),
+        ]
+    )
+
+    with patch("app.services.triage.call_json_with_cost", call_json):
+        with pytest.raises(AIInvalidResponse):
+            await triage_email(_email(body="Please upload your transcript."), "School Application")

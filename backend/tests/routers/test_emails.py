@@ -80,7 +80,7 @@ def test_list_emails_rls_isolation(authed_client: TestClient) -> None:
     other_user_email = _make_email(user_id=uuid4())
     page = EmailListPage(items=[other_user_email], next_cursor=None)
     with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
-        resp = authed_client.get("/emails")
+        authed_client.get("/emails")
     # The router must pass the current user's ID to list_emails, not trust the request
     call_filters = mock_list.call_args[0][0]
     assert call_filters.user_id == _USER_ID
@@ -113,6 +113,17 @@ def test_list_emails_passes_sender_search_param(authed_client: TestClient) -> No
     assert resp.status_code == 200
     call_filters = mock_list.call_args[0][0]
     assert call_filters.sender_search == "alice"
+
+
+def test_list_emails_passes_contact_tag_id_param(authed_client: TestClient) -> None:
+    contact_tag_id = uuid4()
+    page = EmailListPage(items=[], next_cursor=None)
+    with patch("app.routers.emails.list_emails", new_callable=AsyncMock, return_value=page) as mock_list:
+        resp = authed_client.get(f"/emails?contact_tag_id={contact_tag_id}")
+
+    assert resp.status_code == 200
+    call_filters = mock_list.call_args[0][0]
+    assert call_filters.contact_tag_id == contact_tag_id
 
 
 def test_list_emails_blank_sender_search_is_ignored(authed_client: TestClient) -> None:
@@ -192,3 +203,28 @@ def test_patch_email_returns_updated_email(authed_client: TestClient) -> None:
     assert resp.status_code == 200
     assert resp.json()["id"] == str(email.id)
     mock_update.assert_awaited_once()
+
+
+def test_patch_email_passes_is_read_to_update(authed_client: TestClient) -> None:
+    email = _make_email().model_copy(update={"is_read": True})
+    with patch("app.routers.emails.update_email", new_callable=AsyncMock, return_value=email) as mock_update:
+        resp = authed_client.patch(f"/emails/{email.id}", json={"is_read": True})
+
+    assert resp.status_code == 200
+    patch_body = mock_update.call_args[0][2]
+    assert patch_body.is_read is True
+
+
+def test_patch_email_archives_gmail_when_pickup_marked_used(authed_client: TestClient) -> None:
+    email = _make_email()
+    updated = email.model_copy(update={"pickup_used": True, "is_archived": True})
+    with (
+        patch("app.routers.emails.get_email", new_callable=AsyncMock, return_value=email) as mock_get,
+        patch("app.routers.emails.archive_gmail_message", new_callable=AsyncMock) as mock_archive,
+        patch("app.routers.emails.update_email", new_callable=AsyncMock, return_value=updated),
+    ):
+        resp = authed_client.patch(f"/emails/{email.id}", json={"pickup_used": True})
+
+    assert resp.status_code == 200
+    mock_get.assert_awaited_once_with(email.id, _USER_ID)
+    mock_archive.assert_awaited_once_with(email.account_id, email.gmail_id)

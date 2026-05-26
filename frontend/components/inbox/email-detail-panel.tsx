@@ -7,7 +7,7 @@ import { AccountColorDot } from "@/components/inbox/account-color-dot";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEmailBody } from "@/lib/queries/emails";
+import { useEmailBody, useMarkEmailRead } from "@/lib/queries/emails";
 import type { Email } from "@/types";
 
 export function EmailDetailPanel({
@@ -22,6 +22,7 @@ export function EmailDetailPanel({
   onArchive: (email: Email) => void;
 }) {
   const bodyQuery = useEmailBody(email?.id ?? null, open);
+  const markRead = useMarkEmailRead();
 
   return (
     <Sheet open={open && Boolean(email)} onOpenChange={onOpenChange}>
@@ -31,7 +32,9 @@ export function EmailDetailPanel({
             <header className="space-y-2">
               <h2 className="pr-10 text-xl font-semibold">{email.subject ?? "(no subject)"}</h2>
               <div className="text-sm text-muted-foreground">
-                {email.sender ?? "(unknown sender)"}
+                {email.sender_name
+                  ? `${email.sender_name} <${email.sender ?? ""}>`
+                  : email.sender ?? "(unknown sender)"}
                 {email.received_at ? ` • ${format(new Date(email.received_at), "PPp")}` : ""}
               </div>
             </header>
@@ -41,9 +44,15 @@ export function EmailDetailPanel({
                 <Archive className="h-4 w-4" />
                 Archive
               </Button>
-              <Button variant="outline">
+              <Button
+                variant="outline"
+                disabled={!email || email.is_read || markRead.isPending}
+                onClick={() => {
+                  if (email) markRead.mutate(email.id);
+                }}
+              >
                 <Check className="h-4 w-4" />
-                Mark Read
+                {email.is_read ? "Read" : "Mark Read"}
               </Button>
             </div>
 

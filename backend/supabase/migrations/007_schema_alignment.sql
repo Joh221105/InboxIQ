@@ -47,7 +47,7 @@ BEGIN
             'access_token',  oauth_token,
             'refresh_token', refresh_token,
             'expires_at',    COALESCE(token_expiry::text, now()::text),
-            'scope',         'https://www.googleapis.com/auth/gmail.readonly'
+            'scope',         'https://www.googleapis.com/auth/gmail.modify'
         )
         WHERE oauth_token IS NOT NULL AND refresh_token IS NOT NULL;
     END IF;

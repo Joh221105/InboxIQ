@@ -13,6 +13,7 @@ TriageCategory = Literal["action_required", "worth_reading", "auto_archive"]
 class ParsedEmail(BaseModel):
     external_id: str          # maps to emails.gmail_id
     sender_email: str         # maps to emails.sender (always lowercased)
+    sender_name: str | None = None
     subject: str
     body_preview: str         # maps to emails.body_text
     received_at: datetime
@@ -40,6 +41,7 @@ class Email(BaseModel):
     thread_id: str | None = None
     subject: str | None = None
     sender: str | None = None
+    sender_name: str | None = None
     body_text: str | None = Field(default=None, exclude=True)
     received_at: datetime | None = None
     is_read: bool = False
@@ -74,6 +76,7 @@ class EmailListPage(BaseModel):
 class EmailFilters(BaseModel):
     user_id: UUID
     account_id: UUID | None = None
+    contact_tag_id: UUID | None = None
     triage_category: TriageCategory | None = None   # maps to ai_category in current schema
     is_archived: bool = False
     since: datetime | None = None
@@ -95,6 +98,7 @@ class EmailFilters(BaseModel):
 class EmailUpdate(BaseModel):
     is_archived: bool | None = None
     pickup_used: bool | None = None
+    is_read: bool | None = None
 
 
 class EmailCounts(BaseModel):

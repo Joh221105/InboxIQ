@@ -33,7 +33,7 @@ class JobStatusResponse(BaseModel):
 async def post_retriage(
     body: RetriageBody,
     claims: UserClaims = Depends(get_current_user),
-):
+) -> Union[RetriageStartResponse, JSONResponse]:
     try:
         job = await start_retriage(claims.user_id, body.context)
     except RateLimited as exc:
@@ -49,7 +49,7 @@ async def post_retriage(
 async def get_job(
     job_id: str,
     claims: UserClaims = Depends(get_current_user),
-):
+) -> JobStatusResponse:
     job = JOBS.get(job_id)
     if not job or job.user_id != claims.user_id:
         raise HTTPException(status_code=404, detail="Job not found")

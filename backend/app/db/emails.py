@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import UUID
@@ -25,6 +26,15 @@ _COUNTS_CACHE_TTL = timedelta(seconds=30)
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
 
 _EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags!contact_tag_id(tag,custom_label,color)"
+
+
+def _sanitize_fts_input(value: str | None) -> str | None:
+    """Keep full-text search input plain before passing it to phraseto_tsquery."""
+    if not value:
+        return None
+    cleaned = re.sub(r"[^\w\s]", " ", value)
+    collapsed = " ".join(cleaned.split())
+    return collapsed or None
 
 
 def _cursor_encode(received_at: datetime, email_id: UUID) -> str:
@@ -85,8 +95,10 @@ async def upsert_email(
     account_id: UUID,
     user_id: UUID,
     parsed: ParsedEmail,
+    *,
+    contact_tag_id: UUID | None = None,
 ) -> Literal["inserted", "updated"]:
-    def _do() -> str:
+    def _do() -> Literal["inserted", "updated"]:
         result = get_service_client().rpc(
             "upsert_email_record",
             {
@@ -95,13 +107,17 @@ async def upsert_email(
                 "p_gmail_id": parsed.external_id,
                 "p_subject": parsed.subject,
                 "p_sender": parsed.sender_email,
+                "p_sender_name": parsed.sender_name,
                 "p_body_text": parsed.body_preview,
+                "p_contact_tag_id": str(contact_tag_id) if contact_tag_id else None,
                 "p_received_at": parsed.received_at.isoformat(),
             },
         ).execute()
-        return result.data  # "inserted" or "updated"
+        if result.data not in ("inserted", "updated"):
+            raise RuntimeError(f"Unexpected upsert result: {result.data!r}")
+        return result.data
 
-    return await asyncio.to_thread(_do)  # type: ignore[return-value]
+    return await asyncio.to_thread(_do)
 
 
 async def list_emails(filters: EmailFilters) -> EmailListPage:
@@ -119,6 +135,9 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         if filters.account_id:
             q = q.eq("account_id", str(filters.account_id))
 
+        if filters.contact_tag_id:
+            q = q.eq("contact_tag_id", str(filters.contact_tag_id))
+
         if filters.triage_category:
             q = q.eq("ai_category", filters.triage_category)
 
@@ -126,7 +145,9 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
             q = q.gte("received_at", filters.since.isoformat())
 
         if filters.search:
-            q = q.filter("search_tsv", "plfts(english)", filters.search)
+            safe_search = _sanitize_fts_input(filters.search)
+            if safe_search:
+                q = q.filter("search_tsv", "plfts(english)", safe_search)
 
         if filters.sender_search:
             q = q.ilike("sender", f"%{filters.sender_search}%")
@@ -164,7 +185,7 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         }
         rows.sort(
             key=lambda row: (
-                priority.get(row.get("ai_category") or row.get("triage_category"), 4),
+                priority.get(str(row.get("ai_category") or row.get("triage_category") or ""), 4),
                 -(datetime.fromisoformat(row["received_at"].replace("Z", "+00:00")).timestamp()
                   if row.get("received_at") else 0),
                 str(row.get("id", "")),
@@ -216,6 +237,8 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
         changes["pickup_used_at"] = datetime.now(timezone.utc).isoformat() if patch.pickup_used else None
         if patch.pickup_used:
             changes["is_archived"] = True
+    if patch.is_read is not None:
+        changes["is_read"] = patch.is_read
     if not changes:
         return existing
 

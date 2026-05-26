@@ -50,7 +50,7 @@ def _make_account(user_id: UUID, account_id: UUID | None = None) -> ConnectedAcc
             access_token="acc_tok",
             refresh_token="ref_tok",
             expires_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-            scope="https://www.googleapis.com/auth/gmail.readonly",
+            scope="https://www.googleapis.com/auth/gmail.modify",
         ),
     )
 

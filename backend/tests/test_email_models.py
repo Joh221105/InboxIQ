@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.models.email import Email, EmailFilters, EmailListPage, ParsedEmail, SyncResult
+from app.models.email import EmailFilters, ParsedEmail, SyncResult
 
 
 def test_parsed_email_fields() -> None:

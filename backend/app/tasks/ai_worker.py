@@ -2,17 +2,41 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from decimal import Decimal
+from uuid import UUID
 
 from app.db.emails import apply_triage_result, list_unprocessed_emails, mark_ai_failed
 from app.db.users import get_user
 from app.services.openai_client import AIInvalidResponse, AIServiceUnavailable
-from app.services.triage import triage_email
+from app.services.triage import TriageResult, triage_email
 
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 10
 BATCH_COST_CAP_USD = 0.50
 WORKER_INTERVAL_SECONDS = 30
+
+
+async def _apply_with_tag_override(
+    email_id: UUID,
+    result: TriageResult,
+    has_contact_tag: bool,
+) -> None:
+    if has_contact_tag and result.category == "auto_archive":
+        result = TriageResult(
+            category="worth_reading",
+            summary=result.summary,
+            triage_context=result.triage_context,
+            deadline_extracted=result.deadline_extracted,
+            action_items=result.action_items,
+            is_pickup_code=result.is_pickup_code,
+            pickup_code=result.pickup_code,
+            pickup_expiry=result.pickup_expiry,
+            retailer=result.retailer,
+            locker_location=result.locker_location,
+            cost_usd=result.cost_usd,
+        )
+    await apply_triage_result(email_id, result)
 
 
 async def process_batch() -> int:
@@ -24,18 +48,31 @@ async def process_batch() -> int:
     contexts = await asyncio.gather(*(get_user(uid) for uid in user_ids))
     ctx_by_user = {user.id: user.default_context for user in contexts}
 
-    async def process_one(email) -> str:
+    processed = 0
+    batch_cost = Decimal("0")
+
+    for email in emails:
+        if batch_cost >= Decimal(str(BATCH_COST_CAP_USD)):
+            logger.warning(
+                "ai_worker cost cap $%.2f reached after %d emails - stopping batch",
+                BATCH_COST_CAP_USD,
+                processed,
+            )
+            break
         try:
             result = await triage_email(email, ctx_by_user[email.user_id])
-            await apply_triage_result(email.id, result)
-            return "ok"
+            await _apply_with_tag_override(
+                email.id,
+                result,
+                has_contact_tag=email.contact_tag is not None,
+            )
+            batch_cost += result.cost_usd
+            processed += 1
         except (AIInvalidResponse, AIServiceUnavailable) as exc:
             logger.warning("ai failed email_id=%s err=%s", email.id, exc)
             await mark_ai_failed(email.id)
-            return "failed"
 
-    results = await asyncio.gather(*(process_one(email) for email in emails))
-    return sum(1 for result in results if result == "ok")
+    return processed
 
 
 async def run_forever() -> None:

@@ -2,6 +2,8 @@ export type User = {
   id: string;
   email: string;
   default_context: "Job Hunting" | "Shopping" | "School Application" | "Daily";
+  notification_tag_preferences?: Record<string, boolean>;
+  data_retention_days?: number | null;
   created_at: string;
 };
 
@@ -22,6 +24,7 @@ export type Email = {
   thread_id: string | null;
   subject: string | null;
   sender: string | null;
+  sender_name: string | null;
   received_at: string | null;
   is_read: boolean;
   labels: string[];
@@ -55,6 +58,12 @@ export type EmailCounts = {
 
 export type EmailBody = {
   body_html: string;
+};
+
+export type EmailDataDeleteCounts = {
+  emails: number;
+  daily_digests: number;
+  ai_usage: number;
 };
 
 export type DigestItem = {

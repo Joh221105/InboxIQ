@@ -85,6 +85,24 @@ async def get_tag(tag_id: UUID, user_id: UUID) -> ContactTag | None:
     return _row_to_tag(row) if row else None
 
 
+async def update_tag(tag_id: UUID, user_id: UUID, changes: dict[str, Any]) -> ContactTag | None:
+    def _update() -> dict[str, Any] | None:
+        result = (
+            get_service_client()
+            .table("contact_tags")
+            .update(changes)
+            .eq("id", str(tag_id))
+            .eq("user_id", str(user_id))
+            .select("*")
+            .maybe_single()
+            .execute()
+        )
+        return result.data
+
+    row = await asyncio.to_thread(_update)
+    return _row_to_tag(row) if row else None
+
+
 async def delete_tag(tag_id: UUID, user_id: UUID) -> bool:
     def _delete() -> list[dict[str, Any]]:
         result = (

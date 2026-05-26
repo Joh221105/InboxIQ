@@ -21,6 +21,13 @@ function firstName(email: string | undefined): string {
   return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "there";
 }
 
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 function DashboardSkeleton() {
   return (
     <main className="space-y-6 p-6">
@@ -57,7 +64,9 @@ export default function HomePage() {
     <main className="space-y-6 p-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Good morning, {firstName(user.data?.email)}</h1>
+          <h1 className="text-2xl font-semibold">
+            {greeting()}, {firstName(user.data?.email)}
+          </h1>
           <p className="text-sm text-muted-foreground">Your inbox briefing is ready.</p>
         </div>
         <ContextSwitcher

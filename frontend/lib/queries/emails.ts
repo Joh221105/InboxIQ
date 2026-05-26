@@ -11,6 +11,7 @@ type EmailQueryArgs = {
   search?: string;
   senderSearch?: string;
   accountId?: string;
+  contactTagId?: string;
 };
 
 function buildEmailPath(args: EmailQueryArgs, cursor?: string | null): string {
@@ -20,6 +21,7 @@ function buildEmailPath(args: EmailQueryArgs, cursor?: string | null): string {
   if (args.search) params.set("search", args.search);
   if (args.senderSearch) params.set("sender_search", args.senderSearch);
   if (args.accountId) params.set("account_id", args.accountId);
+  if (args.contactTagId) params.set("contact_tag_id", args.contactTagId);
   if (cursor) params.set("cursor", cursor);
   return `/emails?${params.toString()}`;
 }
@@ -88,6 +90,48 @@ export function useArchiveEmail() {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["email-counts"] });
+      void queryClient.invalidateQueries({ queryKey: ["emails"] });
+    },
+  });
+}
+
+export function useMarkEmailRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (emailId: string) =>
+      apiFetch<Email>(`/emails/${emailId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_read: true }),
+      }),
+    onMutate: async (emailId) => {
+      await queryClient.cancelQueries({ queryKey: ["emails"] });
+      const previous = queryClient.getQueriesData<{ pages: EmailListPage[] }>({
+        queryKey: ["emails"],
+      });
+
+      for (const [queryKey, data] of previous) {
+        if (!data?.pages) continue;
+        queryClient.setQueryData(queryKey, {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.map((email) =>
+              email.id === emailId ? { ...email, is_read: true } : email,
+            ),
+          })),
+        });
+      }
+
+      return { previous };
+    },
+    onError: (_error, _emailId, context) => {
+      for (const [queryKey, data] of context?.previous ?? []) {
+        queryClient.setQueryData(queryKey, data);
+      }
+      toast.error("Mark read failed");
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["emails"] });
     },
   });

@@ -6,7 +6,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
   let context = "Daily";
   let jobPolls = 0;
 
-  await page.route(/.*\/users\/me$/, async (route) => {
+  await page.route("**/users/me", async (route) => {
     await route.fulfill({
       json: {
         id: "user-1",
@@ -17,7 +17,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
     });
   });
 
-  await page.route(/.*\/accounts$/, async (route) => {
+  await page.route("**/accounts", async (route) => {
     await route.fulfill({
       json: [
         {
@@ -32,7 +32,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
     });
   });
 
-  await page.route(/.*\/digest\/today$/, async (route) => {
+  await page.route("**/digest/today", async (route) => {
     await route.fulfill({
       json: {
         generated_at: "2026-05-14T16:00:00Z",
@@ -53,7 +53,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
     });
   });
 
-  await page.route(/.*\/emails.*/, async (route) => {
+  await page.route("**/emails**", async (route) => {
     await route.fulfill({
       json: {
         items: [
@@ -86,7 +86,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
     });
   });
 
-  await page.route(/.*\/pickup-codes.*/, async (route) => {
+  await page.route("**/pickup-codes**", async (route) => {
     await route.fulfill({
       json: {
         items: [
@@ -106,7 +106,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
     });
   });
 
-  await page.route(/.*\/users\/me\/context$/, async (route) => {
+  await page.route("**/users/me/context", async (route) => {
     context = "Job Hunting";
     await route.fulfill({
       json: {
@@ -122,7 +122,7 @@ test("dashboard context switch refreshes digest", async ({ page }) => {
     });
   });
 
-  await page.route(/.*\/jobs\/job-1$/, async (route) => {
+  await page.route("**/jobs/job-1", async (route) => {
     jobPolls += 1;
     await route.fulfill({ json: { status: jobPolls > 1 ? "done" : "running", processed: 1, total: 1 } });
   });

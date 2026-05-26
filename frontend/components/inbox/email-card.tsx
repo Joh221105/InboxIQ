@@ -70,8 +70,10 @@ export function EmailCard({
       <AccountColorDot color={email.account_color} />
       <div className="min-w-0 space-y-1">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-semibold">{email.sender ?? "(unknown)"}</span>
-          <ContactTagBadge tag={email.contact_tag} />
+          <span className="truncate font-semibold">
+            {email.sender_name ?? email.sender ?? "(unknown)"}
+          </span>
+          <ContactTagBadge tag={email.contact_tag} sender={email.sender} />
         </div>
         <div className="truncate font-medium">{email.subject ?? "(no subject)"}</div>
         {summary ? (

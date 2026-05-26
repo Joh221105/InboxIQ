@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Union
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -43,11 +44,11 @@ async def disconnect_account(
     return Response(status_code=204)
 
 
-@router.post("/{account_id}/sync")
+@router.post("/{account_id}/sync", response_model=None)
 async def trigger_sync(
     account_id: UUID,
     claims: UserClaims = Depends(get_current_user),
-) -> SyncResult:
+) -> Union[SyncResult, JSONResponse]:
     account = await get_account(account_id)
     if account.user_id != claims.user_id:
         raise HTTPException(status_code=404)

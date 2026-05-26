@@ -100,12 +100,6 @@ async def _completion(system: str, user: str) -> tuple[str, int, int]:
     return content, prompt_tokens, completion_tokens
 
 
-@retry(
-    retry=retry_if_exception_type(AIServiceUnavailable),
-    wait=wait_random_exponential(min=1, max=10),
-    stop=stop_after_attempt(3),
-    reraise=True,
-)
 async def call_json(
     *,
     system: str,
@@ -115,7 +109,34 @@ async def call_json(
     user_id: UUID,
     email_id: UUID | None = None,
 ) -> T:
+    parsed, _cost = await call_json_with_cost(
+        system=system,
+        user=user,
+        response_model=response_model,
+        kind=kind,
+        user_id=user_id,
+        email_id=email_id,
+    )
+    return parsed
+
+
+@retry(
+    retry=retry_if_exception_type(AIServiceUnavailable),
+    wait=wait_random_exponential(min=1, max=10),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
+async def call_json_with_cost(
+    *,
+    system: str,
+    user: str,
+    response_model: type[T],
+    kind: str,
+    user_id: UUID,
+    email_id: UUID | None = None,
+) -> tuple[T, Decimal]:
     raw, prompt_tokens, completion_tokens = await _completion(system, user)
+    cost = _usage_cost(prompt_tokens, completion_tokens)
     await _record_usage(
         user_id=user_id,
         email_id=email_id,
@@ -127,6 +148,7 @@ async def call_json(
         data = json.loads(raw)
     except json.JSONDecodeError:
         raw, prompt_tokens, completion_tokens = await _completion(system, user)
+        cost += _usage_cost(prompt_tokens, completion_tokens)
         await _record_usage(
             user_id=user_id,
             email_id=email_id,
@@ -146,4 +168,4 @@ async def call_json(
         logger.warning("invalid openai response kind=%s raw=%s err=%s", kind, raw, exc)
         raise AIInvalidResponse(str(exc)) from exc
 
-    return parsed
+    return parsed, cost

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from unittest.mock import patch
 from uuid import uuid4
 

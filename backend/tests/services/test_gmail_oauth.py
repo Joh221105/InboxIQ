@@ -77,7 +77,7 @@ def test_build_authorize_url_contains_required_params() -> None:
     assert params["client_id"][0] == "test-gmail-client-id.apps.googleusercontent.com"
     assert params["redirect_uri"][0] == "http://localhost:8000/auth/gmail/callback"
     assert params["response_type"][0] == "code"
-    assert "https://www.googleapis.com/auth/gmail.readonly" in params["scope"][0]
+    assert "https://www.googleapis.com/auth/gmail.modify" in params["scope"][0]
     assert params["access_type"][0] == "offline"
     assert params["prompt"][0] == "consent"
     assert params["include_granted_scopes"][0] == "true"
@@ -94,7 +94,7 @@ async def test_exchange_code_success() -> None:
                 "access_token": "test_access",
                 "refresh_token": "test_refresh",
                 "expires_in": 3600,
-                "scope": "https://www.googleapis.com/auth/gmail.readonly",
+                "scope": "https://www.googleapis.com/auth/gmail.modify",
                 "token_type": "Bearer",
             })
         )
@@ -102,7 +102,7 @@ async def test_exchange_code_success() -> None:
 
     assert tokens.access_token == "test_access"
     assert tokens.refresh_token == "test_refresh"
-    assert tokens.scope == "https://www.googleapis.com/auth/gmail.readonly"
+    assert tokens.scope == "https://www.googleapis.com/auth/gmail.modify"
     assert tokens.expires_at > datetime.now(timezone.utc)
 
 
@@ -144,13 +144,13 @@ async def test_refresh_tokens_race_only_one_google_call() -> None:
         access_token="old_access",
         refresh_token="old_refresh",
         expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
-        scope="https://www.googleapis.com/auth/gmail.readonly",
+        scope="https://www.googleapis.com/auth/gmail.modify",
     )
     fresh = OAuthTokens(
         access_token="new_access",
         refresh_token="old_refresh",
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        scope="https://www.googleapis.com/auth/gmail.readonly",
+        scope="https://www.googleapis.com/auth/gmail.modify",
     )
 
     db_call_n = 0
@@ -177,7 +177,7 @@ async def test_refresh_tokens_race_only_one_google_call() -> None:
                 return httpx.Response(200, json={
                     "access_token": "new_access",
                     "expires_in": 3600,
-                    "scope": "https://www.googleapis.com/auth/gmail.readonly",
+                    "scope": "https://www.googleapis.com/auth/gmail.modify",
                     "token_type": "Bearer",
                 })
 

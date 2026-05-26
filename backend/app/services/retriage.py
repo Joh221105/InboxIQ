@@ -4,8 +4,8 @@ import asyncio
 import logging
 import math
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -26,9 +26,11 @@ class RetriageJob:
     total: int
     processed: int = 0
     status: Literal["running", "done", "failed"] = "running"
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 JOBS: dict[str, RetriageJob] = {}
+_JOB_TTL_SECONDS = 3600
 RATE_LIMIT_SECONDS = 60
 _last_request_at: dict[UUID, datetime] = {}
 
@@ -38,7 +40,26 @@ class RateLimited(Exception):
         self.retry_after = retry_after_seconds
 
 
+def _evict_stale_entries(ttl_seconds: int = _JOB_TTL_SECONDS) -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)
+    stale_jobs = [
+        job_id
+        for job_id, job in list(JOBS.items())
+        if job.status in ("done", "failed") and job.created_at < cutoff
+    ]
+    for job_id in stale_jobs:
+        JOBS.pop(job_id, None)
+
+    stale_users = [
+        user_id for user_id, timestamp in list(_last_request_at.items())
+        if timestamp < cutoff
+    ]
+    for user_id in stale_users:
+        _last_request_at.pop(user_id, None)
+
+
 async def start_retriage(user_id: UUID, context: str) -> RetriageJob:
+    _evict_stale_entries()
     now = datetime.now(timezone.utc)
     last = _last_request_at.get(user_id)
     if last:

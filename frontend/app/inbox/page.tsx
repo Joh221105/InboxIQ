@@ -36,6 +36,7 @@ function InboxPageContent() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showAutoArchived, setShowAutoArchived] = useState(false);
 
   const emailsQuery = useEmails({ category: tab, search: q || undefined, senderSearch: senderSearch || undefined });
   const countsQuery = useEmailCounts();
@@ -45,8 +46,18 @@ function InboxPageContent() {
     () => emailsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [emailsQuery.data],
   );
+  const autoArchivedCount = tab === "all"
+    ? emails.filter((email) => (email.triage_category ?? email.ai_category) === "auto_archive").length
+    : 0;
+  const visibleEmails = tab === "all" && !showAutoArchived
+    ? emails.filter((email) => (email.triage_category ?? email.ai_category) !== "auto_archive")
+    : emails;
   const selectedEmail = emails.find((email) => email.id === selectedId) ?? null;
   const hasUnprocessed = emails.some((email) => email.ai_processed === false);
+
+  useEffect(() => {
+    setShowAutoArchived(false);
+  }, [tab, q, senderSearch]);
 
   useEffect(() => {
     if (!deepLinkedEmailId) return;
@@ -129,15 +140,34 @@ function InboxPageContent() {
             <Skeleton className="h-[88px] w-full" />
           </div>
         ) : (
-          <EmailList
-            emails={emails}
+          <>
+            {tab === "all" && autoArchivedCount > 0 ? (
+              <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                <span>
+                  {showAutoArchived
+                    ? `${autoArchivedCount} auto-archived emails shown`
+                    : `${autoArchivedCount} auto-archived emails collapsed`}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAutoArchived((value) => !value)}
+                >
+                  {showAutoArchived ? "Hide auto-archived" : "Show auto-archived"}
+                </Button>
+              </div>
+            ) : null}
+            <EmailList
+              emails={visibleEmails}
             selectedId={selectedId}
             onSelect={selectEmail}
             onArchive={archiveEmail}
             hasNextPage={Boolean(emailsQuery.hasNextPage)}
             fetchNextPage={() => void emailsQuery.fetchNextPage()}
             emptyText={emptyStateForTab(tab)}
-          />
+            />
+          </>
         )}
       </section>
 

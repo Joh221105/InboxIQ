@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.core.auth import UserClaims, get_current_user
 from app.db.contact_tags import (
@@ -12,13 +12,14 @@ from app.db.contact_tags import (
     count_emails_for_identifier,
     create_tag,
     delete_tag,
-    get_tag,
     list_user_tags,
+    update_tag,
 )
 from app.models.contact_tag import (
     ContactJobStatus,
     ContactTag,
     ContactTagCreate,
+    ContactTagUpdate,
     ContactsGrouped,
     CreateContactResponse,
 )
@@ -31,8 +32,6 @@ from app.services.contact_tags import (
     apply_retroactive_async,
     normalize_identifier,
 )
-
-from fastapi import Depends
 
 router = APIRouter(tags=["contacts"])
 
@@ -110,6 +109,25 @@ async def delete_contact(
     if not deleted:
         raise HTTPException(status_code=404, detail="Contact tag not found")
     return Response(status_code=204)
+
+
+@router.patch("/contacts/{tag_id}", response_model=ContactTag)
+async def patch_contact(
+    tag_id: UUID,
+    body: ContactTagUpdate,
+    claims: UserClaims = Depends(get_current_user),
+) -> ContactTag:
+    changes: dict[str, object] = {}
+    if body.custom_label is not None:
+        changes["custom_label"] = body.custom_label
+    if body.color is not None:
+        changes["color"] = body.color
+    if not changes:
+        raise HTTPException(status_code=422, detail="No updatable fields provided")
+    updated = await update_tag(tag_id, claims.user_id, changes)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Contact tag not found")
+    return updated
 
 
 @router.get("/contacts/jobs/{job_id}", response_model=ContactJobStatus)

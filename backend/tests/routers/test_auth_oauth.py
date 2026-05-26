@@ -66,7 +66,7 @@ def _mock_tokens() -> MagicMock:
     t.access_token = "acc"
     t.refresh_token = "ref"
     t.expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
-    t.scope = "https://www.googleapis.com/auth/gmail.readonly"
+    t.scope = "https://www.googleapis.com/auth/gmail.modify"
     return t
 
 

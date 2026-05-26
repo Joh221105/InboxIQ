@@ -30,7 +30,7 @@ def _make_account(disconnected_at=None) -> ConnectedAccount:
             access_token="acc",
             refresh_token="ref",
             expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
-            scope="https://www.googleapis.com/auth/gmail.readonly",
+            scope="https://www.googleapis.com/auth/gmail.modify",
         ),
         color="#4F46E5",
         disconnected_at=disconnected_at,

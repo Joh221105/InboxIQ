@@ -12,6 +12,7 @@ const baseEmail: Email = {
   thread_id: null,
   subject: "Interview update",
   sender: "recruiter@example.com",
+  sender_name: "Recruiter Team",
   received_at: "2026-05-10T12:00:00Z",
   is_read: false,
   labels: [],
@@ -48,6 +49,11 @@ describe("EmailCard", () => {
     });
 
     expect(screen.getByText("Recruiter")).toBeInTheDocument();
+    expect(screen.getByText("Recruiter Team")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /manage contact tag/i })).toHaveAttribute(
+      "href",
+      "/contacts?identifier=recruiter%40example.com",
+    );
     expect(screen.getByText("Due Nov 15")).toBeInTheDocument();
     expect(screen.getByLabelText("Triage category: Action required")).toBeInTheDocument();
     const card = getByTestId("email-card");

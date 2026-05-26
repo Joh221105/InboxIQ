@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import re
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from html import escape
@@ -16,6 +17,8 @@ from app.services.gmail_sync import get_authed_service
 _BODY_CACHE_TTL = timedelta(minutes=5)
 _BODY_CACHE_MAX = 100
 _body_cache: OrderedDict[tuple[UUID, str], tuple[datetime, str]] = OrderedDict()
+_EVENT_HANDLER_RE = re.compile(r"^on\w+$", re.IGNORECASE)
+_BLOCKED_TAGS = {"script", "style", "link", "meta", "base", "noscript"}
 
 
 def _decode_body_data(data: str) -> str:
@@ -53,8 +56,13 @@ def _extract_html_and_plain(payload: dict[str, Any]) -> tuple[str, str]:
 
 def sanitize_body_html(body_html: str) -> str:
     soup = BeautifulSoup(body_html, "html.parser")
-    for tag in soup.find_all("script"):
-        tag.decompose()
+    for tag_name in _BLOCKED_TAGS:
+        for tag in soup.find_all(tag_name):
+            tag.decompose()
+    for tag in soup.find_all(True):
+        for attr in list(tag.attrs):
+            if _EVENT_HANDLER_RE.match(attr):
+                del tag[attr]
     return str(soup)
 
 

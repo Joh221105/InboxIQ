@@ -27,3 +27,8 @@ BEGIN
     RETURN chosen_color;
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION public.assign_account_color(UUID, UUID)
+    FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.assign_account_color(UUID, UUID)
+    TO service_role;

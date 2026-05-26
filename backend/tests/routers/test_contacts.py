@@ -178,6 +178,37 @@ def test_delete_other_users_tag_returns_404(authed_client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+def test_patch_contact_updates_label_and_color(authed_client: TestClient) -> None:
+    tag = ContactTag(
+        id=uuid4(),
+        user_id=_USER_ID,
+        identifier="prof@uw.edu",
+        tag="professor",
+        custom_label="My Prof",
+        color="#FF0000",
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+    with patch("app.routers.contacts.update_tag", new=AsyncMock(return_value=tag)):
+        resp = authed_client.patch(
+            f"/contacts/{tag.id}",
+            json={"custom_label": "My Prof", "color": "#FF0000"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["custom_label"] == "My Prof"
+    assert resp.json()["color"] == "#FF0000"
+
+
+def test_patch_contact_not_found(authed_client: TestClient) -> None:
+    with patch("app.routers.contacts.update_tag", new=AsyncMock(return_value=None)):
+        resp = authed_client.patch(
+            f"/contacts/{uuid4()}",
+            json={"custom_label": "X"},
+        )
+
+    assert resp.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # GET /contacts/jobs/{job_id}
 # ---------------------------------------------------------------------------

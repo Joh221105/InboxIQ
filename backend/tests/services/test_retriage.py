@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -89,3 +89,38 @@ async def test_retriage_job_tracking_moves_to_done() -> None:
     assert job.status == "done"
     assert job.processed == 2
     assert job.total == 2
+
+
+def test_evict_stale_entries_removes_old_jobs() -> None:
+    from app.services.retriage import JOBS, RetriageJob, _evict_stale_entries, _last_request_at
+
+    JOBS.clear()
+    _last_request_at.clear()
+    job_id = "old_job"
+    user_id = uuid4()
+    old_job = RetriageJob(job_id=job_id, user_id=user_id, total=5)
+    old_job.status = "done"
+    old_job.created_at = datetime.now(timezone.utc) - timedelta(seconds=7201)
+    JOBS[job_id] = old_job
+    _last_request_at[user_id] = datetime.now(timezone.utc) - timedelta(seconds=7201)
+
+    _evict_stale_entries(ttl_seconds=3600)
+
+    assert job_id not in JOBS
+    assert user_id not in _last_request_at
+
+
+def test_evict_stale_entries_keeps_recent_jobs() -> None:
+    from app.services.retriage import JOBS, RetriageJob, _evict_stale_entries, _last_request_at
+
+    JOBS.clear()
+    _last_request_at.clear()
+    job_id = "new_job"
+    user_id = uuid4()
+    JOBS[job_id] = RetriageJob(job_id=job_id, user_id=user_id, total=3)
+    _last_request_at[user_id] = datetime.now(timezone.utc)
+
+    _evict_stale_entries(ttl_seconds=3600)
+
+    assert job_id in JOBS
+    assert user_id in _last_request_at

@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Protocol
+from typing import Awaitable, Callable
 
 from fastapi import Request, Response
 from pydantic_settings import BaseSettings
@@ -39,7 +40,7 @@ def config_presence_summary(settings: BaseSettings) -> dict[str, bool]:
     }
 
 
-async def resolve_log_user_id(headers: HeadersProtocol) -> str | None:
+async def resolve_log_user_id(headers: Mapping[str, str]) -> str | None:
     authorization = headers.get("authorization")
     if not authorization:
         return None
@@ -94,8 +95,3 @@ async def request_logging_middleware(
         user_id=user_id,
     )
     return response
-
-
-class HeadersProtocol(Protocol):
-    def get(self, key: str, default: str | None = None) -> str | None:
-        ...

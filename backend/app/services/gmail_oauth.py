@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.db.connected_accounts import get_account, update_oauth_token
 from app.models.connected_account import OAuthTokens
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -152,8 +152,14 @@ async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
             )
 
         if resp.status_code != 200:
-            body = resp.json()
-            raise RefreshFailed(is_invalid_grant=body.get("error") == "invalid_grant")
+            try:
+                body = resp.json()
+            except Exception:
+                body = {}
+            is_invalid = body.get("error") == "invalid_grant"
+            if is_invalid:
+                _refresh_locks.pop(account_id, None)
+            raise RefreshFailed(is_invalid_grant=is_invalid)
 
         data = resp.json()
         try:

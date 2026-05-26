@@ -4,12 +4,35 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { apiFetch } from "@/lib/api";
-import type { ContactsGrouped, CreateContactRequest, CreateContactResponse } from "@/types";
+import type { ContactsGrouped, CreateContactRequest, CreateContactResponse, EmailListPage } from "@/types";
 
 export function useContacts() {
   return useQuery({
     queryKey: ["contacts"],
     queryFn: () => apiFetch<ContactsGrouped>("/contacts"),
+  });
+}
+
+export function useContactEmailHistory(contactTagId: string | null) {
+  return useQuery({
+    queryKey: ["contact-history", contactTagId],
+    enabled: Boolean(contactTagId),
+    queryFn: async () => {
+      const active = await apiFetch<EmailListPage>(
+        `/emails?contact_tag_id=${contactTagId}&is_archived=false&limit=25`,
+      );
+      const archived = await apiFetch<EmailListPage>(
+        `/emails?contact_tag_id=${contactTagId}&is_archived=true&limit=25`,
+      );
+      return {
+        items: [...active.items, ...archived.items].sort((a, b) => {
+          const left = a.received_at ? new Date(a.received_at).getTime() : 0;
+          const right = b.received_at ? new Date(b.received_at).getTime() : 0;
+          return right - left;
+        }),
+        next_cursor: null,
+      } satisfies EmailListPage;
+    },
   });
 }
 

@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Inter } from "next/font/google";
-import Link from "next/link";
 import { Toaster } from "sonner";
+import { AppNav } from "@/components/app-nav";
 import { cn } from "@/lib/utils";
-import { SignOutButton } from "@/components/sign-out-button";
 import { Providers } from "@/components/providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -26,14 +25,6 @@ export const metadata: Metadata = {
   description: "AI-powered unified email — connect Gmail and triage your inbox",
 };
 
-const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/inbox", label: "Inbox" },
-  { href: "/packages", label: "Packages" },
-  { href: "/contacts", label: "Contacts" },
-  { href: "/settings", label: "Settings" },
-];
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -42,21 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen`}>
-        <nav className="flex flex-col w-56 shrink-0 border-r px-4 py-6 gap-1">
-          <span className="text-base font-semibold mb-4">InboxIQ</span>
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm px-3 py-2 rounded hover:bg-accent"
-            >
-              {link.label}
-            </Link>
-          ))}
-          <div className="mt-auto pt-4 border-t">
-            <SignOutButton />
-          </div>
-        </nav>
+        <AppNav />
         <main className="flex-1 overflow-auto">
           <Providers>{children}</Providers>
         </main>

@@ -4,7 +4,7 @@ import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -72,9 +72,22 @@ class ContactTagJob:
     total: int
     processed: int = 0
     status: Literal["running", "done", "failed"] = "running"
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 JOBS: dict[str, ContactTagJob] = {}
+_JOB_TTL_SECONDS = 3600
+
+
+def _evict_stale_contact_jobs() -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=_JOB_TTL_SECONDS)
+    stale = [
+        job_id
+        for job_id, job in list(JOBS.items())
+        if job.status in ("done", "failed") and job.created_at < cutoff
+    ]
+    for job_id in stale:
+        JOBS.pop(job_id, None)
 
 
 async def apply_retroactive_async(
@@ -82,6 +95,7 @@ async def apply_retroactive_async(
     user_id: UUID,
     identifier: str,
 ) -> str:
+    _evict_stale_contact_jobs()
     job_id = uuid.uuid4().hex
     total = await db.count_emails_for_identifier(user_id, identifier)
     job = ContactTagJob(job_id=job_id, user_id=user_id, total=total)

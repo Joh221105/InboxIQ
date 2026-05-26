@@ -6,7 +6,7 @@ import base64
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from bs4 import BeautifulSoup
@@ -22,6 +22,7 @@ from app.db.connected_accounts import (
 from app.db.emails import upsert_email
 from app.models.connected_account import ConnectedAccount
 from app.models.email import ParsedEmail, SyncResult
+from app.services.contact_tags import find_contact_tag
 from app.services.gmail_oauth import RefreshFailed, refresh_tokens
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ def parse_payload(payload: dict) -> str:
     return text[:BODY_PREVIEW_MAX_CHARS]
 
 
-async def get_authed_service(account: ConnectedAccount):
+async def get_authed_service(account: ConnectedAccount) -> Any:
     tokens = account.oauth_token
     if tokens.expires_at < datetime.now(timezone.utc) + timedelta(seconds=60):
         tokens = await refresh_tokens(account.id, tokens.refresh_token)
@@ -89,6 +90,25 @@ async def get_authed_service(account: ConnectedAccount):
         return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
     return await asyncio.to_thread(_build)
+
+
+async def archive_gmail_message(account_id: UUID, gmail_id: str) -> None:
+    account = await get_account(account_id)
+    service = await get_authed_service(account)
+
+    def _archive() -> None:
+        (
+            service.users()
+            .messages()
+            .modify(
+                userId="me",
+                id=gmail_id,
+                body={"removeLabelIds": ["INBOX"]},
+            )
+            .execute()
+        )
+
+    await asyncio.to_thread(_archive)
 
 
 async def list_message_ids(service, after_unix_seconds: int | None) -> list[str]:
@@ -114,6 +134,7 @@ async def list_message_ids(service, after_unix_seconds: int | None) -> list[str]
 
 
 _SENDER_RE = re.compile(r"<([^>]+)>")
+_DISPLAY_NAME_RE = re.compile(r'^"?([^"<]+?)"?\s*<')
 
 
 async def fetch_message(service, message_id: str) -> ParsedEmail | None:
@@ -140,7 +161,11 @@ async def fetch_message(service, message_id: str) -> ParsedEmail | None:
     subject = headers.get("Subject", "")
     from_header = headers.get("From", "")
     m = _SENDER_RE.search(from_header)
-    sender_email = (m.group(1) if m else from_header).lower()
+    sender_email = (m.group(1) if m else from_header).lower().strip()
+    name_match = _DISPLAY_NAME_RE.match(from_header)
+    sender_name = name_match.group(1).strip() if name_match else None
+    if not sender_name and "@" in sender_email:
+        sender_name = sender_email.split("@", 1)[0]
 
     internal_date_ms = msg.get("internalDate")
     if internal_date_ms:
@@ -155,6 +180,7 @@ async def fetch_message(service, message_id: str) -> ParsedEmail | None:
     return ParsedEmail(
         external_id=message_id,
         sender_email=sender_email,
+        sender_name=sender_name,
         subject=subject,
         body_preview=body_preview,
         received_at=received_at,
@@ -191,7 +217,13 @@ async def sync_account(account_id: UUID) -> SyncResult:
             parsed = await fetch_message(service, mid)
             if parsed is None:
                 return ("skipped", mid)
-            outcome = await upsert_email(account_id, account.user_id, parsed)
+            contact_tag_id = await find_contact_tag(account.user_id, parsed.sender_email)
+            outcome = await upsert_email(
+                account_id,
+                account.user_id,
+                parsed,
+                contact_tag_id=contact_tag_id,
+            )
             return (outcome, mid)
 
     results = await asyncio.gather(
@@ -203,9 +235,11 @@ async def sync_account(account_id: UUID) -> SyncResult:
         if isinstance(r, Exception):
             logger.error("sync_account error for account %s: %s", account_id, r)
             errors += 1
-        elif r[0] == "inserted":
+            continue
+        outcome = cast(tuple[Literal["inserted", "updated", "skipped"], str], r)
+        if outcome[0] == "inserted":
             inserted += 1
-        elif r[0] == "updated":
+        elif outcome[0] == "updated":
             updated += 1
 
     if errors == 0:

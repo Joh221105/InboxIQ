@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from typing import Any
+
 from supabase import Client, create_client
 
 from app.core.config import settings
@@ -14,5 +16,5 @@ def get_anon_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_anon_key)
 
 
-def get_service_client() -> Client:
+def get_service_client() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)

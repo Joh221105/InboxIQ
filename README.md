@@ -218,53 +218,173 @@ Disputes are resolved by creating a GitHub Issue tagged
 
 ---
 
-## Getting Started (for Developer)
+## Running the App Locally
 
-### 1. Supabase
+### Prerequisites
+
+| Tool | Version |
+| ---- | ------- |
+| Python | 3.11+ |
+| Node.js | 18+ |
+| npm | 9+ |
+
+You also need accounts at [Supabase](https://supabase.com), [Google Cloud](https://console.cloud.google.com) (Gmail API), and [OpenAI](https://platform.openai.com).
+
+---
+
+### Step 1 — Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run the SQL in `supabase/migrations/001_connected_accounts.sql` in the SQL Editor (creates `connected_accounts` for OAuth tokens).
-3. **Authentication → URL configuration:** add site URL `http://localhost:3000` and redirect URL `http://localhost:3000/auth/callback` (add your production URLs when deployed).
-4. Copy **Project URL**, **anon** key (frontend), **service_role** key (backend only), and **JWT Secret** (Settings → API → JWT Settings) for env files below.
+2. **Apply all migrations** in `backend/supabase/migrations/` (001 through 021) into the Supabase SQL Editor.  
+   Use the helper script to print them all in order:
+   ```bash
+   python backend/scripts/print_migrations.py
+   ```
+   Then paste the output into the **SQL Editor** in your Supabase dashboard.
+3. **Authentication → URL configuration:**
+   - Site URL: `http://localhost:3000`
+   - Redirect URL: `http://localhost:3000/auth/callback`
+4. Copy your keys for the env files below:
+   - **Project URL** → `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend only)
+   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (backend only — never exposed to frontend)
+   - **JWT Secret** (Settings → API → JWT Settings) → `SUPABASE_JWT_SECRET`
 
-### 2. Google Cloud (Gmail OAuth)
+---
 
-1. Enable **Gmail API** for the project.
-2. OAuth consent screen (External test users as needed).
-3. Create **OAuth 2.0 Client ID** (Web application).  
-   **Authorized redirect URI** must exactly match `GMAIL_REDIRECT_URI`, e.g. `http://127.0.0.1:8000/auth/gmail/callback` (local) and your Railway API URL in production.
+### Step 2 — Google Cloud (Gmail OAuth)
 
-### 3. Backend (FastAPI)
+1. Enable the **Gmail API** in your Google Cloud project.
+2. Configure the OAuth consent screen (External, add test users as needed).
+3. Create an **OAuth 2.0 Client ID** (Web application).
+   - Add authorized redirect URI: `http://127.0.0.1:8000/auth/gmail/callback`
+4. Copy **Client ID** → `GMAIL_CLIENT_ID` and **Client Secret** → `GMAIL_CLIENT_SECRET`.
+
+---
+
+### Step 3 — Backend (FastAPI)
 
 ```bash
 cd backend
+
+# Create and activate a virtual environment
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Copy and fill in environment variables
 cp .env.example .env
-# Edit .env — use Supabase service_role + JWT secret (not anon key)
+```
+
+**`backend/.env` — required variables:**
+
+```ini
+SUPABASE_URL=https://<your-project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
+SUPABASE_JWT_SECRET=<jwt_secret>        # leave blank for ECC/RS256 projects
+GMAIL_CLIENT_ID=<oauth_client_id>
+GMAIL_CLIENT_SECRET=<oauth_client_secret>
+GMAIL_REDIRECT_URI=http://127.0.0.1:8000/auth/gmail/callback
+OAUTH_STATE_SECRET=<random_32+_char_string>
+OPENAI_API_KEY=<openai_api_key>
+FRONTEND_URL=http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+```bash
+# Start the API server
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000/docs` for the interactive API.
+> Interactive API docs: <http://127.0.0.1:8000/docs>
 
-### 4. Frontend (Next.js 14)
+The background AI worker and email sync scheduler start automatically with the server.
+
+---
+
+### Step 4 — Frontend (Next.js 14)
 
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
+
+# Copy and fill in environment variables
 cp .env.example .env.local
-# Set NEXT_PUBLIC_API_URL to the backend, e.g. http://127.0.0.1:8000
+```
+
+**`frontend/.env.local` — required variables:**
+
+```ini
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon_key>
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+```bash
+# Start the dev server
 npm run dev
 ```
 
-### Running AI quality tests
+> App: <http://localhost:3000>
+
+---
+
+### Step 5 — First-run walkthrough
+
+1. Open `http://localhost:3000`
+2. **Sign in** via magic link (check your email)
+3. Go to **Settings** → **Connect Gmail** → complete the OAuth flow
+4. Trigger an initial sync: `POST /accounts/{id}/sync` from the API docs (or wait up to 60 s for the scheduler)
+5. Visit **Inbox** — emails should appear with AI triage badges within ~90 s
+
+---
+
+### Running the Tests
+
+**Backend (pytest):**
 
 ```bash
-RUN_AI_QUALITY_TESTS=1 pytest backend/tests/ai_quality/
+cd backend
+source .venv/bin/activate
+
+# Run the full test suite
+pytest
+
+# Run with coverage report
+pytest --cov=app --cov-report=term-missing
+
+# Run a specific module
+pytest tests/services/test_triage.py -v
 ```
 
-Estimated cost: about $0.20 per run.
+**Frontend (Vitest):**
+
+```bash
+cd frontend
+npm test              # run all unit tests
+npm run test:ui       # interactive watch mode
+```
+
+**Frontend (Playwright E2E):**
+
+```bash
+cd frontend
+npx playwright install   # first time only
+npx playwright test
+```
+
+**Backend AI quality tests** (cost ~$0.20/run, uses real OpenAI):
+
+```bash
+cd backend
+RUN_AI_QUALITY_TESTS=1 pytest tests/ai_quality/
+```
+
+---
 
 ### Cost monitoring
 
@@ -275,9 +395,9 @@ GROUP BY 1
 ORDER BY 1 DESC;
 ```
 
-Visit `http://localhost:3000` → **Sign in** (magic link) → **Connect Gmail** → **Fetch recent emails** (expects ≥10 messages in the mailbox for the full acceptance check).
+---
 
-### 5. Deploy (skeleton)
+### Step 6 — Deploy to Production
 
 - **Vercel:** import the repo, set **Root Directory** to `frontend`, add the same env vars as `.env.local`, set `NEXT_PUBLIC_API_URL` to your Railway API URL.
 - **Railway:** new service from `backend/`, set variables from `backend/.env.example`, start command `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (see `Procfile`). Set `FRONTEND_URL` and `GMAIL_REDIRECT_URI` to the production callback URL.
@@ -393,7 +513,7 @@ For graders and demo viewers: Google may show a "Google hasn't verified this app
 
 ### Supabase
 
-- Apply all migrations in `backend/supabase/migrations/` to the production project, currently `001` through `016`.
+- Apply all migrations in `backend/supabase/migrations/` to the production project, currently `001` through `021`.
 - Authentication -> URL Configuration:
   - Site URL: `https://<vercel-url>`
   - Redirect URLs:

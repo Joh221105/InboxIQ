@@ -15,14 +15,14 @@ const activeCode = {
 test("package tracker happy path", async ({ page }) => {
   let used = false;
 
-  await page.route(/.*\/pickup-codes.*/, async (route) => {
+  await page.route("**/pickup-codes**", async (route) => {
     const url = new URL(route.request().url());
     const wantsUsed = url.searchParams.get("used") === "true";
     const items = wantsUsed ? (used ? [activeCode] : []) : used ? [] : [activeCode];
     await route.fulfill({ json: { items } });
   });
 
-  await page.route(/.*\/emails\/email-active.*/, async (route) => {
+  await page.route("**/emails/email-active**", async (route) => {
     used = true;
     await route.fulfill({
       json: {

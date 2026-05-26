@@ -63,7 +63,6 @@ async def test_generate_daily_digest_returns_ai_items_when_successful() -> None:
 @pytest.mark.asyncio
 async def test_generate_daily_digest_returns_empty_when_no_emails() -> None:
     from app.services.digest import generate_daily_digest
-    from app.services.openai_client import call_json as real_call_json
 
     call_json = AsyncMock()
     with (

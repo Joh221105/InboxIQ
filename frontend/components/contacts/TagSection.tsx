@@ -28,12 +28,25 @@ function getTagLabel(tag: ContactTag): string {
   return SECTION_LABELS[tag.tag] ?? tag.tag;
 }
 
-function ContactRow({ tag }: { tag: ContactTag }) {
+function ContactRow({
+  tag,
+  selected,
+  onSelect,
+}: {
+  tag: ContactTag;
+  selected: boolean;
+  onSelect: (tag: ContactTag) => void;
+}) {
   const deleteContact = useDeleteContact();
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-      <div className="flex items-center gap-2 min-w-0">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        onClick={() => onSelect(tag)}
+        aria-pressed={selected}
+      >
         <span
           className="size-3 shrink-0 rounded-full"
           style={{ backgroundColor: tag.color }}
@@ -46,7 +59,7 @@ function ContactRow({ tag }: { tag: ContactTag }) {
         >
           {getTagLabel(tag)}
         </span>
-      </div>
+      </button>
       <AlertDialog>
         <AlertDialogTrigger
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -77,7 +90,17 @@ function ContactRow({ tag }: { tag: ContactTag }) {
   );
 }
 
-export function TagSection({ type, tags }: { type: TagType; tags: ContactTag[] }) {
+export function TagSection({
+  type,
+  tags,
+  selectedId,
+  onSelect,
+}: {
+  type: TagType;
+  tags: ContactTag[];
+  selectedId: string | null;
+  onSelect: (tag: ContactTag) => void;
+}) {
   return (
     <section>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -90,7 +113,12 @@ export function TagSection({ type, tags }: { type: TagType; tags: ContactTag[] }
       ) : (
         <div className="space-y-2">
           {tags.map((tag) => (
-            <ContactRow key={tag.id} tag={tag} />
+            <ContactRow
+              key={tag.id}
+              tag={tag}
+              selected={selectedId === tag.id}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}

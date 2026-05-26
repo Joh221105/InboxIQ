@@ -23,6 +23,11 @@ class ContactTagCreate(BaseModel):
     color: str | None = None
 
 
+class ContactTagUpdate(BaseModel):
+    custom_label: str | None = None
+    color: str | None = None
+
+
 class ContactsGrouped(BaseModel):
     professor: list[ContactTag] = []
     friend: list[ContactTag] = []
