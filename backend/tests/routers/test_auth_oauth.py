@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -72,10 +73,12 @@ def _mock_tokens() -> MagicMock:
 
 def test_callback_success_redirects(anon_client: TestClient) -> None:
     state = sign_state({"user_id": str(_USER_ID), "return_to": "/settings"})
+    connected_account = SimpleNamespace(id=uuid4())
     with (
         patch("app.routers.auth.exchange_code", new_callable=AsyncMock, return_value=_mock_tokens()),
         patch("app.routers.auth.get_gmail_address", new_callable=AsyncMock, return_value="me@gmail.com"),
-        patch("app.routers.auth.upsert_account", new_callable=AsyncMock),
+        patch("app.routers.auth.upsert_account", new_callable=AsyncMock, return_value=connected_account),
+        patch("app.routers.auth._schedule_initial_sync") as mock_schedule,
     ):
         resp = anon_client.get(
             f"/auth/gmail/callback?code=good_code&state={state}",
@@ -85,6 +88,7 @@ def test_callback_success_redirects(anon_client: TestClient) -> None:
     loc = resp.headers["location"]
     assert "gmail_connected=success" in loc
     assert "/settings" in loc
+    mock_schedule.assert_called_once_with(connected_account.id)
 
 
 def test_callback_expired_state(anon_client: TestClient) -> None:

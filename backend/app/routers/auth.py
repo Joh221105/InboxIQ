@@ -1,12 +1,17 @@
 # backend/app/routers/auth.py
 from __future__ import annotations
 
+import asyncio
+import logging
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 
 from app.core.auth import UserClaims, get_current_user
 from app.core.config import settings
 from app.db.connected_accounts import upsert_account
+from app.services.gmail_sync import sync_account
 from app.services.gmail_oauth import (
     OAuthExchangeFailed,
     StateExpired,
@@ -18,6 +23,20 @@ from app.services.gmail_oauth import (
 )
 
 router = APIRouter(prefix="/auth/gmail", tags=["gmail-auth"])
+logger = logging.getLogger(__name__)
+
+
+def _schedule_initial_sync(account_id: UUID) -> None:
+    async def _run_sync() -> None:
+        try:
+            await sync_account(account_id)
+        except Exception as exc:
+            logger.warning("Initial sync failed for account %s: %s", account_id, exc)
+
+    try:
+        asyncio.create_task(_run_sync())
+    except RuntimeError as exc:
+        logger.warning("Unable to schedule initial sync for account %s: %s", account_id, exc)
 
 
 @router.get("/start")
@@ -71,12 +90,13 @@ async def gmail_oauth_callback(
 
     email_address = await get_gmail_address(tokens.access_token)
 
-    await upsert_account(
+    account = await upsert_account(
         user_id=claims.user_id,
         email_address=email_address,
         provider="gmail",
         oauth_token=tokens,
     )
+    _schedule_initial_sync(account.id)
 
     return RedirectResponse(
         url=f"{frontend}{return_to}?gmail_connected=success",

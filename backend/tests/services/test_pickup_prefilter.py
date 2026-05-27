@@ -71,3 +71,29 @@ def test_pickup_prefilter_true_cases(text: str) -> None:
 )
 def test_pickup_prefilter_false_cases(text: str) -> None:
     assert pickup_code_prefilter(_email(text)) is False
+
+
+@pytest.mark.parametrize(
+    "subject,body",
+    [
+        (
+            "Amazon Locker Pickup Reminder",
+            (
+                "Hello, your package is ready for pickup at Amazon Hub Locker - Maple Station. "
+                "Pickup code: 9021 7744. Bring this code to open the locker. "
+                "Code expires in 2 days."
+            ),
+        ),
+        (
+            "FedEx Hold at Location: Ready for pickup",
+            (
+                "Your shipment is now available for pickup at the FedEx Office location. "
+                "Use pickup code 44A7B9 and bring a government-issued ID."
+            ),
+        ),
+    ],
+)
+def test_pickup_prefilter_detects_realistic_provider_samples(subject: str, body: str) -> None:
+    email = _email(subject)
+    email.body_text = body
+    assert pickup_code_prefilter(email) is True

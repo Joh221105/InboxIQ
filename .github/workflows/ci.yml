@@ -22,6 +22,27 @@ jobs:
       - run: npm run lint
       - run: npx tsc --noEmit
 
+  frontend-e2e:
+    name: Frontend E2E (playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://testproject.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+
   backend:
     name: Backend (ruff + mypy + pytest)
     runs-on: ubuntu-latest

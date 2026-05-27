@@ -8,4 +8,10 @@ export default defineConfig({
     trace: "on-first-retry",
     ...devices["Desktop Chrome"],
   },
+  webServer: {
+    command: "npm run build && npm run start",
+    url: "http://127.0.0.1:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });
