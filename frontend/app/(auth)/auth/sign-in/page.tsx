@@ -33,13 +33,14 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={onBack}
-        className="text-sm text-muted-foreground hover:text-foreground text-left w-fit"
+        className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
       >
         ← Back to sign in
-      </button>
+      </Button>
       {sent ? (
         <p className="text-sm text-center text-muted-foreground">
           Check your email for a reset link.
@@ -117,13 +118,14 @@ function SignInForm() {
           placeholder="••••••••"
         />
       </div>
-      <button
+      <Button
+        variant="ghost"
         type="button"
         onClick={() => setShowForgot(true)}
-        className="text-sm text-muted-foreground hover:text-foreground text-left w-fit"
+        className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
       >
         Forgot password?
-      </button>
+      </Button>
       {error && <p className="text-sm text-destructive text-center">{error}</p>}
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Signing in…" : "Sign in"}
