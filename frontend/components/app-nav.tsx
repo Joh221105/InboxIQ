@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import { SignOutButton } from "@/components/sign-out-button";
-import { Bun } from "@/components/bun";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +38,15 @@ export function AppNav() {
     >
       {/* logo */}
       <div className="mb-4 flex items-center gap-2.5 px-5 pb-1">
-        <Bun size={26} envelope={false} label="InboxIQ logo" />
+        <video
+          src="/bun-idle.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-label="InboxIQ logo"
+          className="size-[26px] object-contain"
+        />
         <span className="font-serif text-xl font-semibold leading-none tracking-wide">
           InboxIQ
         </span>

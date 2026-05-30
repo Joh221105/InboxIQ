@@ -3,14 +3,21 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
-import { Bun } from "@/components/bun";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function EmptyDashboard() {
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-[18px] p-6">
-      <Bun size={160} expr="empty" label="Bun holding an empty envelope, waiting for your inbox" />
+      <video
+        src="/bun-idle.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        aria-label="Bun holding an empty envelope, waiting for your inbox"
+        className="w-[128px] object-contain"
+      />
 
       <h1 className="font-serif text-[28px] font-normal leading-tight text-foreground">
         Your inbox is waiting
