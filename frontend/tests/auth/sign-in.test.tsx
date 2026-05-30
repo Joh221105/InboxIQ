@@ -18,8 +18,9 @@ vi.mock("@/lib/supabase/client", () => ({
 }));
 
 const mockPush = vi.fn();
+const mockReplace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
 describe("SignInPage", () => {
@@ -52,7 +53,7 @@ describe("SignInPage", () => {
         email: "user@example.com",
         password: "password123",
       });
-      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(mockReplace).toHaveBeenCalledWith("/");
     });
   });
 
@@ -96,7 +97,10 @@ describe("SignInPage", () => {
   });
 
   it("calls signUp and redirects to / on success", async () => {
-    mockSignUp.mockResolvedValueOnce({ error: null });
+    mockSignUp.mockResolvedValueOnce({
+      data: { session: { user: {} }, user: {} },
+      error: null,
+    });
     render(<SignInPage />);
     fireEvent.click(screen.getByRole("tab", { name: "Sign up" }));
 
@@ -116,8 +120,35 @@ describe("SignInPage", () => {
         email: "new@example.com",
         password: "password123",
       });
-      expect(mockPush).toHaveBeenCalledWith("/");
+      expect(mockReplace).toHaveBeenCalledWith("/");
     });
+  });
+
+  it("shows confirmation message when signUp returns null session", async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { session: null, user: {} },
+      error: null,
+    });
+    render(<SignInPage />);
+    fireEvent.click(screen.getByRole("tab", { name: "Sign up" }));
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Check your email to confirm your account before signing in."),
+      ).toBeInTheDocument();
+    });
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it("shows forgot password form when link is clicked", async () => {

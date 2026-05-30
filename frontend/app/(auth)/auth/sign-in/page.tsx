@@ -21,7 +21,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
     setError(null);
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
     });
     setLoading(false);
     if (error) {
@@ -53,12 +53,13 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
               id="reset-email"
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
             />
           </div>
-          {error && <p className="text-sm text-destructive text-center">{error}</p>}
+          {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Sending…" : "Send reset link"}
           </Button>
@@ -90,7 +91,7 @@ function SignInForm() {
     if (error) {
       setError(error.message);
     } else {
-      router.push("/");
+      router.replace("/");
     }
   }
 
@@ -102,6 +103,7 @@ function SignInForm() {
           id="signin-email"
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
@@ -113,6 +115,7 @@ function SignInForm() {
           id="signin-password"
           type="password"
           required
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
@@ -126,7 +129,7 @@ function SignInForm() {
       >
         Forgot password?
       </Button>
-      {error && <p className="text-sm text-destructive text-center">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Signing in…" : "Sign in"}
       </Button>
@@ -151,12 +154,14 @@ function SignUpForm() {
     setLoading(true);
     setError(null);
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
     if (error) {
       setError(error.message);
+    } else if (!data.session) {
+      setError("Check your email to confirm your account before signing in.");
     } else {
-      router.push("/");
+      router.replace("/");
     }
   }
 
@@ -168,6 +173,7 @@ function SignUpForm() {
           id="signup-email"
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
@@ -179,6 +185,7 @@ function SignUpForm() {
           id="signup-password"
           type="password"
           required
+          autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
@@ -190,12 +197,13 @@ function SignUpForm() {
           id="signup-confirm"
           type="password"
           required
+          autoComplete="new-password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           placeholder="••••••••"
         />
       </div>
-      {error && <p className="text-sm text-destructive text-center">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Creating account…" : "Create account"}
       </Button>
