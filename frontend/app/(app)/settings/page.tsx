@@ -76,7 +76,7 @@ function SettingsPageContent() {
   useEffect(() => {
     apiFetch<ConnectedAccount[]>("/accounts")
       .then(setAccounts)
-      .catch(() => toast.error("Failed to load connected accounts"));
+      .catch(() => {});
     apiFetch<User>("/users/me")
       .then((loadedUser) => {
         setUser(loadedUser);
@@ -85,7 +85,7 @@ function SettingsPageContent() {
           loadedUser.data_retention_days ? String(loadedUser.data_retention_days) : "",
         );
       })
-      .catch(() => toast.error("Failed to load settings"));
+      .catch(() => {});
   }, []);
 
   async function connectGmail() {
