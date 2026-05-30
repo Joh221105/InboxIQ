@@ -1,27 +1,40 @@
 "use client";
 
-import { Inbox } from "lucide-react";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 
+import { Bun } from "@/components/bun";
 import { buttonVariants } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function EmptyDashboard() {
   return (
-    <div className="flex min-h-full items-center justify-center p-6">
-      <Card className="w-full max-w-md p-8 text-center">
-        <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-primary/10">
-          <Inbox className="size-10 text-primary" aria-hidden="true" />
-        </div>
-        <h1 className="text-2xl font-semibold">Connect your first inbox</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Bring Gmail into InboxIQ to start seeing briefings, deadlines, and pickup codes.
-        </p>
-        <Link href="/settings" className={cn(buttonVariants(), "mt-6")}>
-          Connect inbox
-        </Link>
-      </Card>
+    <div className="flex min-h-full flex-col items-center justify-center gap-[18px] p-6">
+      <Bun size={160} expr="empty" label="Bun holding an empty envelope, waiting for your inbox" />
+
+      <h1 className="font-serif text-[28px] font-normal leading-tight text-foreground">
+        Your inbox is waiting
+      </h1>
+
+      <p className="max-w-[360px] text-center text-[14.5px] leading-relaxed text-muted-foreground text-pretty">
+        Connect a Gmail account and Bun will start sorting, summarizing, and
+        surfacing what actually needs you.
+      </p>
+
+      <Link
+        href="/settings"
+        className={cn(
+          buttonVariants(),
+          "flex h-11 items-center gap-2 px-6 text-[15px]",
+        )}
+      >
+        <Plus className="size-4" />
+        Connect Gmail
+      </Link>
+
+      <p className="text-[12.5px] text-muted-foreground">
+        Read-only access · disconnect anytime
+      </p>
     </div>
   );
 }

@@ -4,16 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bun } from "@/components/bun";
 
+/* ── Forgot-password sub-form ───────────────────────────────── */
 function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail]   = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent]     = useState(false);
+  const [error, setError]   = useState<string | null>(null);
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
@@ -24,11 +24,8 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
     });
     setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      setSent(true);
-    }
+    if (error) setError(error.message);
+    else setSent(true);
   }
 
   return (
@@ -42,7 +39,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         ← Back to sign in
       </Button>
       {sent ? (
-        <p className="text-sm text-center text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground">
           Check your email for a reset link.
         </p>
       ) : (
@@ -59,7 +56,11 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
               placeholder="you@example.com"
             />
           </div>
-          {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
+          {error && (
+            <p role="alert" className="text-center text-sm text-destructive">
+              {error}
+            </p>
+          )}
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Sending…" : "Send reset link"}
           </Button>
@@ -69,17 +70,16 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   );
 }
 
+/* ── Sign-in form ────────────────────────────────────────────── */
 function SignInForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
   const [showForgot, setShowForgot] = useState(false);
 
-  if (showForgot) {
-    return <ForgotPasswordForm onBack={() => setShowForgot(false)} />;
-  }
+  if (showForgot) return <ForgotPasswordForm onBack={() => setShowForgot(false)} />;
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -88,11 +88,8 @@ function SignInForm() {
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      router.replace("/");
-    }
+    if (error) setError(error.message);
+    else router.replace("/");
   }
 
   return (
@@ -125,11 +122,15 @@ function SignInForm() {
         variant="ghost"
         type="button"
         onClick={() => setShowForgot(true)}
-        className="h-auto px-0 text-sm text-muted-foreground hover:text-foreground"
+        className="h-auto self-start px-0 text-sm text-muted-foreground hover:text-foreground"
       >
         Forgot password?
       </Button>
-      {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
+      {error && (
+        <p role="alert" className="text-center text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Signing in…" : "Sign in"}
       </Button>
@@ -137,13 +138,14 @@ function SignInForm() {
   );
 }
 
+/* ── Sign-up form ────────────────────────────────────────────── */
 function SignUpForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [confirm, setConfirm]   = useState("");
+  const [error, setError]       = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
 
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
@@ -156,13 +158,9 @@ function SignUpForm() {
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else if (!data.session) {
-      setError("Check your email to confirm your account before signing in.");
-    } else {
-      router.replace("/");
-    }
+    if (error) setError(error.message);
+    else if (!data.session) setError("Check your email to confirm your account before signing in.");
+    else router.replace("/");
   }
 
   return (
@@ -203,7 +201,11 @@ function SignUpForm() {
           placeholder="••••••••"
         />
       </div>
-      {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
+      {error && (
+        <p role="alert" className="text-center text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Creating account…" : "Create account"}
       </Button>
@@ -211,31 +213,83 @@ function SignUpForm() {
   );
 }
 
+/* ── Page ────────────────────────────────────────────────────── */
 export default function SignInPage() {
+  const [tab, setTab] = useState<"sign-in" | "sign-up">("sign-in");
+
   return (
-    <Card className="w-full max-w-sm mx-4">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl">InboxIQ</CardTitle>
-        <CardDescription>AI-powered email management</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="sign-in">
-          <TabsList className="w-full">
-            <TabsTrigger value="sign-in" className="flex-1">
-              Sign in
-            </TabsTrigger>
-            <TabsTrigger value="sign-up" className="flex-1">
-              Sign up
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="sign-in" className="mt-4">
-            <SignInForm />
-          </TabsContent>
-          <TabsContent value="sign-up" className="mt-4">
-            <SignUpForm />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
+      {/* left brand panel */}
+      <div
+        className="hidden flex-col justify-between p-10 lg:flex lg:flex-1"
+        style={{
+          background:   "var(--sidebar)",
+          borderRight:  "1px solid var(--sidebar-border)",
+        }}
+      >
+        {/* top wordmark */}
+        <div className="flex items-center gap-2.5">
+          <Bun size={28} envelope={false} label="InboxIQ logo" />
+          <span className="font-serif text-[22px] font-semibold leading-none">
+            InboxIQ
+          </span>
+        </div>
+
+        {/* center tagline */}
+        <div className="max-w-[340px]">
+          <h1 className="font-serif text-[40px] font-normal leading-[1.12] tracking-[-0.01em]">
+            The inbox that handles itself.
+          </h1>
+          <p className="mt-[14px] text-[15px] leading-relaxed text-muted-foreground">
+            Bun sorts your mail by urgency, pulls out deadlines and pickup codes,
+            and tucks the noise away — so opening your inbox feels calm.
+          </p>
+        </div>
+
+        {/* Bun illustration with ear-bob */}
+        <Bun size={132} expr="loading" bob label="Bun the rabbit mascot" />
+      </div>
+
+      {/* right form panel */}
+      <div className="relative flex w-full flex-col items-center justify-center px-6 lg:w-[420px] lg:px-12">
+        <div className="w-full max-w-[320px]">
+          {/* heading */}
+          <div className="mb-6">
+            <h2 className="text-[24px] font-semibold">
+              {tab === "sign-in" ? "Welcome back" : "Create account"}
+            </h2>
+            <p className="mt-1 text-[14px] text-muted-foreground">
+              {tab === "sign-in"
+                ? "Sign in to your InboxIQ account"
+                : "Join InboxIQ to start managing your inbox"}
+            </p>
+          </div>
+
+          {/* tab switcher */}
+          <div
+            className="mb-5 flex rounded-full border p-[3px]"
+            style={{ background: "var(--muted)", borderColor: "var(--border)" }}
+          >
+            {(["sign-in", "sign-up"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className="flex-1 rounded-full py-1.5 text-[13.5px] font-medium transition-colors duration-150"
+                style={
+                  tab === t
+                    ? { background: "var(--card)", color: "var(--foreground)", boxShadow: "0 1px 3px oklch(0.40 0.03 60 / 0.08)" }
+                    : { color: "var(--muted-foreground)" }
+                }
+              >
+                {t === "sign-in" ? "Sign in" : "Sign up"}
+              </button>
+            ))}
+          </div>
+
+          {tab === "sign-in" ? <SignInForm /> : <SignUpForm />}
+        </div>
+      </div>
+    </div>
   );
 }

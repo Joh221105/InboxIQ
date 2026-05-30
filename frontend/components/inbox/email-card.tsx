@@ -6,7 +6,6 @@ import { formatDistanceToNow } from "date-fns";
 import { AccountColorDot } from "@/components/inbox/account-color-dot";
 import { ContactTagBadge } from "@/components/inbox/contact-tag-badge";
 import { DeadlineBadge } from "@/components/inbox/deadline-badge";
-import { TriageBadge } from "@/components/inbox/triage-badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Email, TriageCategory } from "@/types";
@@ -23,6 +22,17 @@ function categoryFor(email: Email): TriageCategory | null {
   return null;
 }
 
+function edgeBorderColor(
+  category: TriageCategory | null,
+  tagColor: string | undefined,
+): string {
+  if (category === "auto_archive") return "transparent";
+  if (tagColor) return tagColor;
+  if (category === "action_required") return "var(--triage-action)";
+  if (category === "worth_reading")   return "var(--triage-read)";
+  return "transparent";
+}
+
 export function EmailCard({
   email,
   selected,
@@ -35,17 +45,9 @@ export function EmailCard({
   onArchive: () => void;
 }) {
   const category = categoryFor(email);
-  const summary =
-    email.ai_summary || email.ai_processed === false ? email.ai_summary : null;
-  const tagColor = email.contact_tag?.color || undefined;
-  const borderStyle = tagColor ? { borderLeftColor: tagColor } : undefined;
-  const borderClass = tagColor
-    ? "border-l-[3px]"   // width matches base; color comes from inline style
-    : category === "action_required"
-      ? "border-l-red-500"
-      : category === "worth_reading"
-        ? "border-l-amber-400"
-        : "border-l-transparent";
+  const tagColor  = email.contact_tag?.color ?? undefined;
+  const borderColor = edgeBorderColor(category, tagColor);
+  const isProcessing = !email.ai_processed && !email.ai_summary;
 
   return (
     <div
@@ -59,37 +61,62 @@ export function EmailCard({
           onClick();
         }
       }}
-      style={borderStyle}
+      style={{ borderLeftColor: borderColor }}
       className={cn(
-        "grid h-[88px] w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border border-l-[3px] bg-background px-4 text-left text-sm transition hover:bg-muted/50",
-        borderClass,
-        category === "auto_archive" && "opacity-60",
-        selected && "ring-2 ring-primary",
+        "grid h-[88px] w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-l-[3px] bg-transparent px-4 text-left text-sm transition-colors duration-150 hover:bg-accent",
+        category === "auto_archive" && "opacity-50",
+        selected && "bg-accent ring-2 ring-inset ring-primary",
       )}
     >
+      {/* col 1 — account dot */}
       <AccountColorDot color={email.account_color} />
-      <div className="min-w-0 space-y-1">
+
+      {/* col 2 — content */}
+      <div className="min-w-0 flex flex-col gap-[3px]">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-semibold">
+          {!email.is_read && (
+            <span
+              className="size-[7px] shrink-0 rounded-full"
+              style={{ background: "var(--primary)" }}
+            />
+          )}
+          <span className="truncate text-[14px] font-semibold">
             {email.sender_name ?? email.sender ?? "(unknown)"}
           </span>
           <ContactTagBadge tag={email.contact_tag} sender={email.sender} />
         </div>
-        <div className="truncate font-medium">{email.subject ?? "(no subject)"}</div>
-        {summary ? (
-          <div className="truncate text-muted-foreground">{summary}</div>
+        <div className="truncate text-[14px] font-medium">
+          {email.subject ?? "(no subject)"}
+        </div>
+        {isProcessing ? (
+          /* AI shimmer state */
+          <div className="flex items-center gap-2 h-[16px]">
+            <span
+              className="flex shrink-0 items-center gap-[5px] text-[11.5px] font-semibold"
+              style={{ color: "var(--primary)" }}
+            >
+              <span className="ai-dot size-[6px] rounded-full" style={{ background: "var(--primary)" }} />
+              Summarizing
+            </span>
+            <span className="skeleton-shimmer h-2 flex-1 max-w-[200px] rounded" />
+          </div>
         ) : (
-          <div className="truncate italic text-muted-foreground">AI processing...</div>
+          <div className="truncate text-[13px] text-muted-foreground">
+            {email.ai_summary ?? (
+              <em className="not-italic">AI processing...</em>
+            )}
+          </div>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <DeadlineBadge date={email.deadline_extracted} />
-        <TriageBadge category={category} />
-        <span className="w-20 text-right text-xs text-muted-foreground">
+
+      {/* col 3 — meta */}
+      <div className="flex shrink-0 flex-col items-end gap-[7px]">
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
           {email.received_at
             ? formatDistanceToNow(new Date(email.received_at), { addSuffix: true })
             : ""}
         </span>
+        <DeadlineBadge date={email.deadline_extracted} />
         <Button
           type="button"
           variant="ghost"
