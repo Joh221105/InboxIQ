@@ -3,7 +3,6 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
-import { AppNav } from "@/components/app-nav";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/components/providers";
 
@@ -32,12 +31,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen`}>
-        <AppNav />
-        <main className="flex-1 overflow-auto">
-          <Providers>{children}</Providers>
-        </main>
-        <Toaster richColors position="top-right" />
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Providers>
+          {children}
+          <Toaster richColors position="top-right" />
+        </Providers>
       </body>
     </html>
   );

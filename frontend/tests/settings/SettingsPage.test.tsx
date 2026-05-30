@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import SettingsPage from "@/app/settings/page";
+import SettingsPage from "@/app/(app)/settings/page";
 import { apiFetch } from "@/lib/api";
 
 vi.mock("next/navigation", () => ({
