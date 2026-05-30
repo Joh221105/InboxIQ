@@ -10,10 +10,13 @@ import {
   Newspaper,
   Plus,
   Settings,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 import { SignOutButton } from "@/components/sign-out-button";
 import { Bun } from "@/components/bun";
+import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -27,6 +30,7 @@ const NAV_LINKS = [
 
 export function AppNav() {
   const pathname = usePathname();
+  const { theme, toggle } = useTheme();
 
   return (
     <nav
@@ -100,9 +104,21 @@ export function AppNav() {
           </Link>
         </div>
 
-        {/* sign out */}
-        <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--sidebar-border)" }}>
+        {/* sign out + theme toggle */}
+        <div className="mt-3 border-t pt-3 flex items-center justify-between" style={{ borderColor: "var(--sidebar-border)" }}>
           <SignOutButton />
+          <button
+            onClick={toggle}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex size-8 items-center justify-center rounded-md transition-colors hover:bg-accent/55"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            {theme === "dark" ? (
+              <Sun className="size-[16px]" strokeWidth={1.9} />
+            ) : (
+              <Moon className="size-[16px]" strokeWidth={1.9} />
+            )}
+          </button>
         </div>
       </div>
     </nav>
