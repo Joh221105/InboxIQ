@@ -8,7 +8,11 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import UUID
 
+import logging
+
 from app.db.supabase import get_service_client
+
+_log = logging.getLogger(__name__)
 from app.models.email import (
     ContactTagInfo,
     Email,
@@ -481,16 +485,20 @@ async def list_upcoming_deadlines(user_id: UUID, days: int = 7) -> list[Email]:
 
 async def get_digest(user_id: UUID, digest_date: date) -> StoredDigest | None:
     def _fetch() -> dict[str, Any] | None:
-        result = (
-            get_service_client()
-            .table("daily_digests")
-            .select("*")
-            .eq("user_id", str(user_id))
-            .eq("digest_date", digest_date.isoformat())
-            .maybe_single()
-            .execute()
-        )
-        return result.data
+        try:
+            result = (
+                get_service_client()
+                .table("daily_digests")
+                .select("*")
+                .eq("user_id", str(user_id))
+                .eq("digest_date", digest_date.isoformat())
+                .maybe_single()
+                .execute()
+            )
+            return result.data
+        except Exception as exc:
+            _log.warning("get_digest query failed (treating as cache miss): %s", exc)
+            return None
 
     data = await asyncio.to_thread(_fetch)
     if not data:
