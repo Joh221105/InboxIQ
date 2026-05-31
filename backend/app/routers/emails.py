@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
+from html import escape
 from typing import Literal
 from uuid import UUID
 
@@ -96,6 +97,15 @@ async def get_email_body(
     email = await get_email(email_id, claims.user_id)
     if email is None or email.user_id != claims.user_id:
         raise HTTPException(status_code=404, detail="Email not found")
+
+    if email.gmail_id.startswith("demo_"):
+        text = email.body_text or ""
+        body_html = (
+            "<div style='font-family:sans-serif;font-size:14px;line-height:1.6;"
+            "color:#1a1a1a;white-space:pre-wrap;padding:4px 0'>"
+            f"{escape(text)}</div>"
+        )
+        return EmailBodyResponse(body_html=body_html)
 
     body_html = await fetch_email_body_html(email.account_id, email.gmail_id)
     return EmailBodyResponse(body_html=sanitize_body_html(body_html))
