@@ -45,6 +45,10 @@ function InboxPageContent() {
   const archiveMutation = useArchiveEmail();
 
   const connectedAccounts = accountsQuery.data?.filter((a) => !a.disconnected_at) ?? [];
+  const allDisconnected =
+    !accountsQuery.isLoading &&
+    connectedAccounts.length === 0 &&
+    (accountsQuery.data?.length ?? 0) > 0;
 
   // Persist result to localStorage as a performance hint for future page loads.
   useEffect(() => {
@@ -123,7 +127,7 @@ function InboxPageContent() {
   );
 
   if (accountsQuery.isLoading) return null;
-  if (noAccounts) return <EmptyDashboard />;
+  if (noAccounts) return <EmptyDashboard allDisconnected={allDisconnected} />;
 
   return (
     <div className="flex h-full flex-col">

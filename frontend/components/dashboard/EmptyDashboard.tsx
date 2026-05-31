@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export function EmptyDashboard() {
+export function EmptyDashboard({ allDisconnected = false }: { allDisconnected?: boolean }) {
   return (
     <div className="flex min-h-full h-full flex-col items-center justify-center gap-[18px] p-6" style={{ background: "#dedbd5" }}>
       <div className="relative h-[200px] w-[154px] overflow-hidden" style={{ background: "#dedbd5" }}>
@@ -22,12 +22,13 @@ export function EmptyDashboard() {
       </div>
 
       <h1 className="font-serif text-[28px] font-normal leading-tight text-foreground">
-        Your inbox is waiting
+        {allDisconnected ? "Gmail disconnected" : "Your inbox is waiting"}
       </h1>
 
       <p className="max-w-[360px] text-center text-[14.5px] leading-relaxed text-muted-foreground text-pretty">
-        Connect a Gmail account and Bun will start sorting, summarizing, and
-        surfacing what actually needs you.
+        {allDisconnected
+          ? "Your Gmail connection expired or was revoked. Reconnect in settings to start receiving emails again."
+          : "Connect a Gmail account and Bun will start sorting, summarizing, and surfacing what actually needs you."}
       </p>
 
       <Link
@@ -37,13 +38,15 @@ export function EmptyDashboard() {
           "flex h-11 items-center gap-2 px-6 text-[15px]",
         )}
       >
-        <Plus className="size-4" />
-        Connect Gmail
+        {allDisconnected ? <RefreshCw className="size-4" /> : <Plus className="size-4" />}
+        {allDisconnected ? "Reconnect Gmail" : "Connect Gmail"}
       </Link>
 
-      <p className="text-[12.5px] text-muted-foreground">
-        Read-only access · disconnect anytime
-      </p>
+      {!allDisconnected && (
+        <p className="text-[12.5px] text-muted-foreground">
+          Read-only access · disconnect anytime
+        </p>
+      )}
     </div>
   );
 }

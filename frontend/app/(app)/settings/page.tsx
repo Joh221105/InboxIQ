@@ -182,35 +182,46 @@ function SettingsPageContent() {
           </p>
         ) : (
           <ul className="space-y-2">
-            {accounts.map((account) => (
-              <li
-                key={account.id}
-                className="flex items-center justify-between rounded-lg border px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className="h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: account.color ?? "#6b7280" }}
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{account.email_address}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {account.last_synced
-                        ? `Last synced ${formatDistanceToNow(new Date(account.last_synced))} ago`
-                        : "Never synced"}
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPendingDisconnect(account)}
+            {accounts.map((account) => {
+              const isDisconnected = Boolean(account.disconnected_at);
+              return (
+                <li
+                  key={account.id}
+                  className="flex items-center justify-between rounded-lg border px-4 py-3"
                 >
-                  Disconnect
-                </Button>
-              </li>
-            ))}
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="h-3 w-3 rounded-full shrink-0"
+                      style={{ backgroundColor: isDisconnected ? "#ef4444" : (account.color ?? "#6b7280") }}
+                    />
+                    <div>
+                      <p className="text-sm font-medium">{account.email_address}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isDisconnected
+                          ? "Connection expired — reconnect to resume syncing"
+                          : account.last_synced
+                            ? `Last synced ${formatDistanceToNow(new Date(account.last_synced))} ago`
+                            : "Never synced"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {isDisconnected ? (
+                    <Button size="sm" onClick={connectGmail}>
+                      Reconnect
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPendingDisconnect(account)}
+                    >
+                      Disconnect
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
