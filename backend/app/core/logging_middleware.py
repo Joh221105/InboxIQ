@@ -32,7 +32,8 @@ def config_presence_summary(settings: BaseSettings) -> dict[str, bool]:
         "oauth_state_secret_set": bool(
             getattr(settings, "oauth_state_secret", "")
         ),
-        "openai_set": bool(getattr(settings, "openai_api_key", "")),
+        "openrouter_set": bool(getattr(settings, "openrouter_api_key", "")),
+        "anthropic_set": bool(getattr(settings, "anthropic_api_key", "")),
         "frontend_url_set": bool(getattr(settings, "frontend_url", "")),
         "allowed_origins_set": bool(getattr(settings, "allowed_origins", "")),
         "sentry_dsn_set": bool(getattr(settings, "sentry_dsn", "")),

@@ -7,8 +7,8 @@ from decimal import Decimal
 from typing import TypeVar
 from uuid import UUID
 
-import openai
-from openai import AsyncOpenAI
+import anthropic as _anthropic_sdk
+from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitError
 from pydantic import BaseModel, ValidationError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
@@ -17,12 +17,19 @@ from app.db.supabase import get_service_client
 
 logger = logging.getLogger(__name__)
 
-GPT4O_INPUT_PER_1K = 0.0025
-GPT4O_OUTPUT_PER_1K = 0.010
-MODEL = "gpt-4o"
+# OpenRouter free-tier model (primary)
+OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
+# Anthropic Claude Haiku (fallback – cheapest Claude model)
+ANTHROPIC_MODEL = "claude-haiku-4-5"
+
+# Anthropic Haiku 4.5 pricing: $1/1M input, $5/1M output
+_HAIKU_INPUT_PER_1K = Decimal("0.001")
+_HAIKU_OUTPUT_PER_1K = Decimal("0.005")
 
 T = TypeVar("T", bound=BaseModel)
-_client: AsyncOpenAI | None = None
+
+_openrouter_client: AsyncOpenAI | None = None
+_anthropic_client: _anthropic_sdk.AsyncAnthropic | None = None
 
 
 class AIInvalidResponse(Exception):
@@ -33,18 +40,41 @@ class AIServiceUnavailable(Exception):
     pass
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=30)
-    return _client
+def _get_openrouter_client() -> AsyncOpenAI:
+    global _openrouter_client
+    if _openrouter_client is None:
+        _openrouter_client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=settings.openrouter_api_key,
+            timeout=30,
+        )
+    return _openrouter_client
 
 
-def _usage_cost(prompt_tokens: int, completion_tokens: int) -> Decimal:
-    cost = (prompt_tokens / 1000 * GPT4O_INPUT_PER_1K) + (
-        completion_tokens / 1000 * GPT4O_OUTPUT_PER_1K
+def _get_anthropic_client() -> _anthropic_sdk.AsyncAnthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = _anthropic_sdk.AsyncAnthropic(
+            api_key=settings.anthropic_api_key,
+        )
+    return _anthropic_client
+
+
+def _usage_cost_anthropic(input_tokens: int, output_tokens: int) -> Decimal:
+    cost = (Decimal(input_tokens) / 1000 * _HAIKU_INPUT_PER_1K) + (
+        Decimal(output_tokens) / 1000 * _HAIKU_OUTPUT_PER_1K
     )
-    return Decimal(str(round(cost, 6)))
+    return round(cost, 6)
+
+
+def _extract_json(text: str) -> str:
+    """Strip markdown code fences that some free models emit around JSON."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
+        text = "\n".join(lines[1:end]).strip()
+    return text
 
 
 async def _record_usage(
@@ -52,17 +82,19 @@ async def _record_usage(
     user_id: UUID,
     email_id: UUID | None,
     kind: str,
+    model: str,
     prompt_tokens: int,
     completion_tokens: int,
+    cost_usd: Decimal,
 ) -> None:
     payload = {
         "user_id": str(user_id),
         "email_id": str(email_id) if email_id else None,
         "kind": kind,
-        "model": MODEL,
+        "model": model,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
-        "cost_usd": str(_usage_cost(prompt_tokens, completion_tokens)),
+        "cost_usd": str(cost_usd),
     }
 
     def _insert() -> None:
@@ -74,30 +106,67 @@ async def _record_usage(
         logger.exception("failed to write ai_usage kind=%s user_id=%s", kind, user_id)
 
 
-async def _completion(system: str, user: str) -> tuple[str, int, int]:
+async def _completion_openrouter(system: str, user: str) -> tuple[str, int, int]:
     try:
-        resp = await _get_client().chat.completions.create(
-            model=MODEL,
+        resp = await _get_openrouter_client().chat.completions.create(
+            model=OPENROUTER_MODEL,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_format={"type": "json_object"},
-            seed=42,
             temperature=0,
             timeout=30,
         )
-    except (openai.APITimeoutError, openai.APIConnectionError, openai.RateLimitError) as exc:
+    except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
         raise AIServiceUnavailable(str(exc)) from exc
-    except openai.OpenAIError as exc:
-        logger.exception("non-retriable openai error")
+    except Exception as exc:
+        logger.exception("openrouter error")
         raise AIServiceUnavailable(str(exc)) from exc
 
     content = resp.choices[0].message.content or ""
     usage = resp.usage
-    prompt_tokens = usage.prompt_tokens if usage else 0
-    completion_tokens = usage.completion_tokens if usage else 0
-    return content, prompt_tokens, completion_tokens
+    return content, usage.prompt_tokens if usage else 0, usage.completion_tokens if usage else 0
+
+
+async def _completion_anthropic(system: str, user: str) -> tuple[str, int, int]:
+    try:
+        resp = await _get_anthropic_client().messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=1024,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+    except (_anthropic_sdk.APITimeoutError, _anthropic_sdk.RateLimitError) as exc:
+        raise AIServiceUnavailable(str(exc)) from exc
+    except _anthropic_sdk.APIError as exc:
+        logger.exception("anthropic error")
+        raise AIServiceUnavailable(str(exc)) from exc
+
+    content = next((b.text for b in resp.content if b.type == "text"), "")
+    return content, resp.usage.input_tokens, resp.usage.output_tokens
+
+
+async def _completion(system: str, user: str) -> tuple[str, int, int, str, Decimal]:
+    """Try OpenRouter first, fall back to Anthropic.
+
+    Returns (content, prompt_tokens, completion_tokens, model_name, cost_usd).
+    OpenRouter free tier has zero cost.
+    """
+    if settings.openrouter_api_key:
+        try:
+            content, pt, ct = await _completion_openrouter(system, user)
+            return content, pt, ct, OPENROUTER_MODEL, Decimal("0")
+        except AIServiceUnavailable:
+            logger.warning("openrouter unavailable, falling back to anthropic")
+
+    if settings.anthropic_api_key:
+        content, pt, ct = await _completion_anthropic(system, user)
+        cost = _usage_cost_anthropic(pt, ct)
+        return content, pt, ct, ANTHROPIC_MODEL, cost
+
+    raise AIServiceUnavailable(
+        "no AI provider configured — set OPENROUTER_API_KEY or ANTHROPIC_API_KEY"
+    )
 
 
 async def call_json(
@@ -135,37 +204,42 @@ async def call_json_with_cost(
     user_id: UUID,
     email_id: UUID | None = None,
 ) -> tuple[T, Decimal]:
-    raw, prompt_tokens, completion_tokens = await _completion(system, user)
-    cost = _usage_cost(prompt_tokens, completion_tokens)
+    raw, prompt_tokens, completion_tokens, model_used, cost = await _completion(system, user)
     await _record_usage(
         user_id=user_id,
         email_id=email_id,
         kind=kind,
+        model=model_used,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        cost_usd=cost,
     )
+
     try:
-        data = json.loads(raw)
+        data = json.loads(_extract_json(raw))
     except json.JSONDecodeError:
-        raw, prompt_tokens, completion_tokens = await _completion(system, user)
-        cost += _usage_cost(prompt_tokens, completion_tokens)
+        # Retry the completion once before giving up
+        raw, prompt_tokens, completion_tokens, model_used, cost2 = await _completion(system, user)
+        cost += cost2
         await _record_usage(
             user_id=user_id,
             email_id=email_id,
             kind=kind,
+            model=model_used,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            cost_usd=cost2,
         )
         try:
-            data = json.loads(raw)
+            data = json.loads(_extract_json(raw))
         except json.JSONDecodeError as exc:
-            logger.warning("invalid json from openai kind=%s raw=%s", kind, raw)
+            logger.warning("invalid json from ai kind=%s raw=%s", kind, raw)
             raise AIInvalidResponse(str(exc)) from exc
 
     try:
         parsed = response_model.model_validate(data)
     except ValidationError as exc:
-        logger.warning("invalid openai response kind=%s raw=%s err=%s", kind, raw, exc)
+        logger.warning("invalid ai response kind=%s raw=%s err=%s", kind, raw, exc)
         raise AIInvalidResponse(str(exc)) from exc
 
     return parsed, cost

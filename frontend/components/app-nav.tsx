@@ -16,6 +16,7 @@ import {
 
 import { SignOutButton } from "@/components/sign-out-button";
 import { useTheme } from "@/components/theme-provider";
+import { useConnectedAccounts } from "@/lib/queries/dashboard";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -30,6 +31,8 @@ const NAV_LINKS = [
 export function AppNav() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
+  const { data: accounts } = useConnectedAccounts();
+  const connectedAccounts = accounts?.filter((a) => !a.disconnected_at) ?? [];
 
   return (
     <nav
@@ -95,14 +98,15 @@ export function AppNav() {
           Accounts
         </p>
         <div className="flex flex-col gap-0.5">
-          {/* placeholder connected account — real data wired via queries later */}
-          <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-            <span
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ background: "#C0712B" }}
-            />
-            <span className="truncate text-sm">Gmail connected</span>
-          </div>
+          {connectedAccounts.map((account) => (
+            <div key={account.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ background: account.color ?? "#C0712B" }}
+              />
+              <span className="truncate text-sm">{account.email_address}</span>
+            </div>
+          ))}
           <Link
             href="/settings"
             className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 hover:bg-accent/55"

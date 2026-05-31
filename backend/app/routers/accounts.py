@@ -24,7 +24,7 @@ async def list_accounts(
     claims: UserClaims = Depends(get_current_user),
 ) -> list[AccountPublic]:
     accounts = await list_user_accounts(claims.user_id)
-    return [AccountPublic.model_validate(a) for a in accounts]
+    return [AccountPublic.model_validate(a, from_attributes=True) for a in accounts]
 
 
 @router.delete("/{account_id}")

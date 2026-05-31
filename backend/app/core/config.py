@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     gmail_client_secret: str
     gmail_redirect_uri: str
     oauth_state_secret: str
-    openai_api_key: str
+    openrouter_api_key: str = ""
+    anthropic_api_key: str = ""
     frontend_url: str
 
     # Optional with defaults

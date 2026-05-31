@@ -95,17 +95,17 @@ async def _probe_supabase() -> str:
         return "down"
 
 
-async def _probe_openai() -> str:
-    return "ok" if bool(settings.openai_api_key) else "not_configured"
+async def _probe_ai() -> str:
+    return "ok" if (settings.openrouter_api_key or settings.anthropic_api_key) else "not_configured"
 
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    supabase_status, openai_status = await asyncio.gather(
-        _probe_supabase(), _probe_openai()
+    supabase_status, ai_status = await asyncio.gather(
+        _probe_supabase(), _probe_ai()
     )
     return {
         "status": "ok",
         "version": settings.git_sha,
-        "deps": {"supabase": supabase_status, "openai": openai_status},
+        "deps": {"supabase": supabase_status, "ai": ai_status},
     }
