@@ -132,7 +132,7 @@ export function PickupCodeCard({
             <DialogTitle className="text-base">{retailerName(code)}</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl bg-white p-4 shadow-inner">
-            <QRCode value={code.pickup_code} size={200} />
+            <QRCode value={code.pickup_code} size={200} bgColor="#ffffff" fgColor="#000000" />
           </div>
           <p className="font-mono text-xl font-bold tracking-widest" style={{ color: "var(--code-fg)" }}>
             {code.pickup_code}
