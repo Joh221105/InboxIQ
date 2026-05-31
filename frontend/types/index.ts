@@ -1,6 +1,7 @@
 export type User = {
   id: string;
   email: string;
+  display_name?: string | null;
   default_context: "Job Hunting" | "Shopping" | "School Application" | "Daily";
   notification_tag_preferences?: Record<string, boolean>;
   data_retention_days?: number | null;

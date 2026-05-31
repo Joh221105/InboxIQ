@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Home,
   Inbox,
-  Bookmark,
   Package,
   Calendar,
-  Newspaper,
   Plus,
   Settings,
   Sun,
@@ -20,11 +19,10 @@ import { useConnectedAccounts } from "@/lib/queries/dashboard";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
-  { href: "/",          label: "Inbox",           icon: Inbox },
-  { href: "/inbox",     label: "Worth Reading",    icon: Bookmark },
+  { href: "/",          label: "Home",             icon: Home },
+  { href: "/inbox",     label: "Inbox",            icon: Inbox },
   { href: "/packages",  label: "Pickup Codes",     icon: Package },
   { href: "/deadlines", label: "Deadlines",        icon: Calendar },
-  { href: "/digest",    label: "Digest",           icon: Newspaper },
   { href: "/settings",  label: "Settings",         icon: Settings },
 ];
 

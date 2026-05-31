@@ -49,6 +49,8 @@ async def update_default_context(user_id: UUID, context: str) -> User:
 
 async def update_user_settings(user_id: UUID, settings: UserSettingsUpdate) -> User:
     changes: dict[str, object] = {}
+    if "display_name" in settings.model_fields_set:
+        changes["display_name"] = settings.display_name
     if "notification_tag_preferences" in settings.model_fields_set:
         changes["notification_tag_preferences"] = settings.notification_tag_preferences or {}
     if "data_retention_days" in settings.model_fields_set:

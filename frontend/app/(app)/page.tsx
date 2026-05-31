@@ -15,7 +15,8 @@ import {
   useUserContext,
 } from "@/lib/queries/dashboard";
 
-function firstName(email: string | undefined): string {
+function firstName(displayName: string | null | undefined, email: string | undefined): string {
+  if (displayName?.trim()) return displayName.trim().split(/\s+/)[0] ?? displayName.trim();
   const local = email?.split("@")[0] ?? "there";
   const cleaned = local.split(/[._-]/)[0] ?? local;
   return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "there";
@@ -65,7 +66,7 @@ export default function HomePage() {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">
-            {greeting()}, {firstName(user.data?.email)}
+            {greeting()}, {firstName(user.data?.display_name, user.data?.email)}
           </h1>
           <p className="text-sm text-muted-foreground">Your inbox briefing is ready.</p>
         </div>
