@@ -21,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
+      - run: npm test
 
   frontend-e2e:
     name: Frontend E2E (playwright)

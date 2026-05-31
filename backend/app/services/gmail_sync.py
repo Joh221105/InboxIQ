@@ -10,6 +10,7 @@ from typing import Any, Literal, cast
 from uuid import UUID
 
 import httplib2
+import tenacity
 from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
 from google_auth_httplib2 import AuthorizedHttp
@@ -32,6 +33,10 @@ logger = logging.getLogger(__name__)
 INITIAL_SYNC_LIMIT = 50
 BODY_PREVIEW_MAX_CHARS = 2000
 PER_ACCOUNT_CONCURRENCY = 5
+
+
+def _is_retryable_http_error(exc: BaseException) -> bool:
+    return isinstance(exc, HttpError) and exc.resp.status in (429, 500, 502, 503, 504)
 
 
 def _extract(payload: dict) -> tuple[str, str]:
@@ -133,7 +138,15 @@ async def list_message_ids(service, after_unix_seconds: int | None) -> list[str]
 
         return ids
 
-    return await asyncio.to_thread(_list)
+    async for attempt in tenacity.AsyncRetrying(
+        retry=tenacity.retry_if_exception(_is_retryable_http_error),
+        wait=tenacity.wait_random_exponential(multiplier=1, max=30),
+        stop=tenacity.stop_after_attempt(3),
+        reraise=True,
+    ):
+        with attempt:
+            return await asyncio.to_thread(_list)
+    raise RuntimeError("unreachable")
 
 
 _SENDER_RE = re.compile(r"<([^>]+)>")
@@ -154,7 +167,18 @@ async def fetch_message(service, message_id: str) -> ParsedEmail | None:
                 return None
             raise
 
-    msg = await asyncio.to_thread(_get)
+    async def _fetch_with_retry() -> dict | None:
+        async for attempt in tenacity.AsyncRetrying(
+            retry=tenacity.retry_if_exception(_is_retryable_http_error),
+            wait=tenacity.wait_random_exponential(multiplier=1, max=30),
+            stop=tenacity.stop_after_attempt(3),
+            reraise=True,
+        ):
+            with attempt:
+                return await asyncio.to_thread(_get)
+        return None  # unreachable; tenacity reraises on exhaustion
+
+    msg = await _fetch_with_retry()
     if msg is None:
         return None
 

@@ -15,8 +15,10 @@ export class ApiError extends Error {
 
 async function getAuthToken(): Promise<string | null> {
   const supabase = createBrowserSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }
 
 export async function apiFetch<T>(

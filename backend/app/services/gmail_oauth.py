@@ -109,14 +109,18 @@ async def exchange_code(code: str) -> OAuthTokens:
             },
         )
     if resp.status_code != 200:
+        try:
+            _error_key = resp.json().get("error", "unknown")
+        except Exception:
+            _error_key = "unparseable"
         logger.error(
-            "google token exchange failed: status=%s body=%s redirect_uri=%s client_id=%s",
+            "google token exchange failed: status=%s error=%s redirect_uri=%s client_id=%s",
             resp.status_code,
-            resp.text,
+            _error_key,
             settings.gmail_redirect_uri,
             settings.gmail_client_id,
         )
-        raise OAuthExchangeFailed(resp.text)
+        raise OAuthExchangeFailed(_error_key)
     data = resp.json()
     try:
         return OAuthTokens(

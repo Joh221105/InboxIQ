@@ -38,12 +38,6 @@ function InboxPageContent() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showAutoArchived, setShowAutoArchived] = useState(false);
-  // Synchronous check from localStorage so we never show a loading delay
-  // when the user hasn't connected any account yet.
-  const [cachedHasAccounts, setCachedHasAccounts] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("inboxiq-has-accounts") === "true";
-  });
 
   const accountsQuery = useConnectedAccounts();
   const emailsQuery = useEmails({ category: tab, search: q || undefined, senderSearch: senderSearch || undefined });
@@ -52,18 +46,15 @@ function InboxPageContent() {
 
   const connectedAccounts = accountsQuery.data?.filter((a) => !a.disconnected_at) ?? [];
 
-  // Persist result to localStorage whenever the query resolves so future
-  // renders can skip the network wait entirely.
+  // Persist result to localStorage as a performance hint for future page loads.
   useEffect(() => {
     if (accountsQuery.data === undefined) return;
     const has = connectedAccounts.length > 0;
     localStorage.setItem("inboxiq-has-accounts", String(has));
-    setCachedHasAccounts(has);
   }, [accountsQuery.data, connectedAccounts.length]);
 
-  // While the query is still in flight use the cached value; once it
-  // resolves use the real result so stale cache can't get stuck.
-  const noAccounts = accountsQuery.isLoading ? !cachedHasAccounts : connectedAccounts.length === 0;
+  // Only derive noAccounts from the resolved query — never from localStorage.
+  const noAccounts = !accountsQuery.isLoading && connectedAccounts.length === 0;
 
   const emails = useMemo(
     () => emailsQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -131,6 +122,7 @@ function InboxPageContent() {
     searchInputRef,
   );
 
+  if (accountsQuery.isLoading) return null;
   if (noAccounts) return <EmptyDashboard />;
 
   return (

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Union
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -29,11 +29,11 @@ class JobStatusResponse(BaseModel):
     total: int
 
 
-@router.post("/triage/retriage", response_model=Union[RetriageStartResponse, Dict[str, Any]])
+@router.post("/triage/retriage", response_model=RetriageStartResponse)
 async def post_retriage(
     body: RetriageBody,
     claims: UserClaims = Depends(get_current_user),
-) -> Union[RetriageStartResponse, JSONResponse]:
+) -> RetriageStartResponse | JSONResponse:
     try:
         job = await start_retriage(claims.user_id, body.context)
     except RateLimited as exc:

@@ -91,6 +91,11 @@ function SettingsPageContent() {
   async function connectGmail() {
     try {
       const { url } = await apiFetch<{ url: string }>("/auth/gmail/start");
+      const parsed = new URL(url);
+      if (parsed.hostname !== "accounts.google.com") {
+        toast.error("Invalid OAuth redirect — please try again");
+        return;
+      }
       window.location.href = url;
     } catch {
       toast.error("Failed to start Gmail connection");

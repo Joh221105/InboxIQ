@@ -370,14 +370,13 @@ async def mark_ai_failed(email_id: UUID) -> int:
         )
         current = (result.data or {}).get("ai_attempts") or 0
         attempts = int(current) + 1
-        changes: dict[str, Any] = {"ai_attempts": attempts, "last_ai_attempt_at": now}
+        changes: dict[str, Any] = {
+            "ai_attempts": attempts,
+            "last_ai_attempt_at": now,
+            "ai_processed": False,  # always reset so worker can retry
+        }
         if attempts >= 3:
-            changes.update(
-                {
-                    "ai_processed": False,
-                    "ai_summary": "(AI unavailable)",
-                }
-            )
+            changes["ai_summary"] = "(AI unavailable)"
         get_service_client().table("emails").update(changes).eq("id", str(email_id)).execute()
         return attempts
 
@@ -393,6 +392,7 @@ async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
             .table("emails")
             .select(_EMAIL_SELECT)
             .eq("ai_processed", False)
+            .lt("ai_attempts", 3)  # don't retry permanently-failed emails
             .or_(f"last_ai_attempt_at.is.null,last_ai_attempt_at.lt.{cutoff.isoformat()}")
             .order("received_at", desc=True)
             .limit(limit)

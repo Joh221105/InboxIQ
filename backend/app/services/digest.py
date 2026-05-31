@@ -21,8 +21,9 @@ def _deadline_value(email: Email) -> str:
 
 
 def _digest_item_from_email(email: Email) -> DigestItem:
+    summary = (email.ai_summary or email.subject or "")[:80]
     return DigestItem(
-        summary=(email.subject or "")[:80],
+        summary=summary,
         source_email_id=email.id,
         deadline=date.fromisoformat(email.deadline_extracted)
         if email.deadline_extracted

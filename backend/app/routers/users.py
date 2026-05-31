@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Union
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -33,11 +33,11 @@ async def get_me(claims: UserClaims = Depends(get_current_user)) -> User:
     return await get_user(claims.user_id)
 
 
-@router.patch("/me/context", response_model=Union[UpdateContextResponse, Dict[str, Any]])
+@router.patch("/me/context", response_model=UpdateContextResponse)
 async def patch_context(
     body: UpdateContextBody,
     claims: UserClaims = Depends(get_current_user),
-) -> Union[UpdateContextResponse, JSONResponse]:
+) -> UpdateContextResponse | JSONResponse:
     try:
         job = await start_retriage(claims.user_id, body.context)
     except RateLimited as exc:
