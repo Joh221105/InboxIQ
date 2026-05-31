@@ -277,7 +277,7 @@ async def list_pickup_codes(
             )
             .eq("connected_accounts.user_id", str(user_id))
             .eq("is_pickup_code", True)
-            .not_("pickup_code", "is", "null")
+            .filter("pickup_code", "not.is", "null")
             .eq("pickup_used", used)
         )
         if not include_expired:

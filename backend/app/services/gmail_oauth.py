@@ -7,9 +7,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import logging
+
 import httpx
 import jwt
 from pydantic import BaseModel, ValidationError
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.db.connected_accounts import get_account, update_oauth_token
@@ -105,6 +109,13 @@ async def exchange_code(code: str) -> OAuthTokens:
             },
         )
     if resp.status_code != 200:
+        logger.error(
+            "google token exchange failed: status=%s body=%s redirect_uri=%s client_id=%s",
+            resp.status_code,
+            resp.text,
+            settings.gmail_redirect_uri,
+            settings.gmail_client_id,
+        )
         raise OAuthExchangeFailed(resp.text)
     data = resp.json()
     try:
