@@ -82,7 +82,8 @@ async def gmail_oauth_callback(
 
     try:
         tokens = await exchange_code(code)
-    except OAuthExchangeFailed:
+    except OAuthExchangeFailed as exc:
+        logger.warning("gmail token exchange failed: %s", exc)
         return err("exchange_failed")
 
     if not tokens.refresh_token:
