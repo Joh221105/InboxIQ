@@ -9,8 +9,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, cast
 from uuid import UUID
 
+import httplib2
 from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -87,7 +89,8 @@ async def get_authed_service(account: ConnectedAccount) -> Any:
     )
 
     def _build():
-        return build("gmail", "v1", credentials=creds, cache_discovery=False)
+        authed_http = AuthorizedHttp(creds, http=httplib2.Http(timeout=30))
+        return build("gmail", "v1", http=authed_http, cache_discovery=False)
 
     return await asyncio.to_thread(_build)
 
