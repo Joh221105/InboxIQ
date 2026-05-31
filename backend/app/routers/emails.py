@@ -1,11 +1,14 @@
 # backend/app/routers/emails.py
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 
 from app.core.auth import UserClaims, get_current_user
 from app.db.emails import get_email, get_email_counts, list_emails, update_email
@@ -75,7 +78,10 @@ async def patch_email(
         existing = await get_email(email_id, claims.user_id)
         if existing is None:
             raise HTTPException(status_code=404, detail="Email not found")
-        await archive_gmail_message(existing.account_id, existing.gmail_id)
+        try:
+            await archive_gmail_message(existing.account_id, existing.gmail_id)
+        except Exception:
+            logger.warning("archive failed for email_id=%s — marking used anyway", email_id)
     updated = await update_email(email_id, claims.user_id, body)
     if updated is None:
         raise HTTPException(status_code=404, detail="Email not found")
