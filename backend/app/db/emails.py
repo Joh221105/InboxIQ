@@ -153,7 +153,7 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
             q = q.ilike("sender", f"%{filters.sender_search}%")
 
         if filters.has_deadline:
-            q = q.not_("deadline_extracted", "is", "null")
+            q = q.filter("deadline_extracted", "not.is", "null")
 
         if filters.deadline_after:
             q = q.gte("deadline_extracted", filters.deadline_after.isoformat())
