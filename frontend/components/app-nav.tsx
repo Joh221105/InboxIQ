@@ -41,7 +41,7 @@ export function AppNav() {
     >
       {/* logo */}
       <div className="mb-4 flex items-center gap-2.5 px-5 pb-1">
-        <div className="size-[52px] shrink-0 overflow-hidden">
+        <div className="size-[52px] shrink-0 overflow-hidden rounded-xl dark:bg-[oklch(0.88_0.025_68)]">
           <video
             src="/bun-idle.mp4"
             autoPlay
@@ -49,7 +49,7 @@ export function AppNav() {
             muted
             playsInline
             aria-label="InboxIQ logo"
-            className="size-full object-cover"
+            className="size-full object-cover mix-blend-multiply dark:mix-blend-normal"
           />
         </div>
         <span className="font-serif text-xl font-semibold leading-none tracking-wide">
