@@ -69,7 +69,7 @@ export function EmailCard({
       )}
     >
       {/* col 1 — account dot + domain */}
-      <AccountColorDot color={email.account_color} email={email.account_email} showLabel />
+      <AccountColorDot color={email.account_color} email={email.account_email} />
 
       {/* col 2 — content */}
       <div className="min-w-0 flex flex-col gap-[3px]">
