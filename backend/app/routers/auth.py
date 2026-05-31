@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from app.core.auth import UserClaims, get_current_user
 from app.core.config import settings
 from app.db.connected_accounts import upsert_account
+from app.db.seed import seed_demo_emails
 from app.services.gmail_sync import sync_account
 from app.services.gmail_oauth import (
     OAuthExchangeFailed,
@@ -37,6 +38,19 @@ def _schedule_initial_sync(account_id: UUID) -> None:
         asyncio.create_task(_run_sync())
     except RuntimeError as exc:
         logger.warning("Unable to schedule initial sync for account %s: %s", account_id, exc)
+
+
+def _schedule_demo_seed(user_id: UUID, account_id: UUID) -> None:
+    async def _run_seed() -> None:
+        try:
+            await seed_demo_emails(user_id, account_id)
+        except Exception as exc:
+            logger.warning("Demo seed failed for account %s: %s", account_id, exc)
+
+    try:
+        asyncio.create_task(_run_seed())
+    except RuntimeError as exc:
+        logger.warning("Unable to schedule demo seed for account %s: %s", account_id, exc)
 
 
 @router.get("/start")
@@ -98,6 +112,7 @@ async def gmail_oauth_callback(
         oauth_token=tokens,
     )
     _schedule_initial_sync(account.id)
+    _schedule_demo_seed(claims.user_id, account.id)
 
     return RedirectResponse(
         url=f"{frontend}{return_to}?gmail_connected=success",
