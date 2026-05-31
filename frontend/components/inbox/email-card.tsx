@@ -68,8 +68,8 @@ export function EmailCard({
         selected && "bg-accent ring-2 ring-inset ring-primary",
       )}
     >
-      {/* col 1 — account dot */}
-      <AccountColorDot color={email.account_color} />
+      {/* col 1 — account dot + domain */}
+      <AccountColorDot color={email.account_color} email={email.account_email} showLabel />
 
       {/* col 2 — content */}
       <div className="min-w-0 flex flex-col gap-[3px]">

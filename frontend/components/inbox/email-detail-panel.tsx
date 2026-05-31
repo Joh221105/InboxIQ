@@ -80,7 +80,7 @@ export function EmailDetailPanel({
             )}
 
             <footer className="mt-auto flex items-center gap-2 border-t pt-4 text-sm text-muted-foreground">
-              <AccountColorDot color={email.account_color} />
+              <AccountColorDot color={email.account_color} email={email.account_email} />
               <span>{email.account_email ?? email.account_id}</span>
             </footer>
           </div>
