@@ -38,15 +38,17 @@ export function AppNav() {
     >
       {/* logo */}
       <div className="mb-4 flex items-center gap-2.5 px-5 pb-1">
-        <video
-          src="/bun-idle.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-label="InboxIQ logo"
-          className="size-[26px] object-contain"
-        />
+        <div className="size-[52px] shrink-0 overflow-hidden">
+          <video
+            src="/bun-idle.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-label="InboxIQ logo"
+            className="size-full object-cover"
+          />
+        </div>
         <span className="font-serif text-xl font-semibold leading-none tracking-wide">
           InboxIQ
         </span>

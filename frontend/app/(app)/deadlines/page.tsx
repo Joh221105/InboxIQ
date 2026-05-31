@@ -2,7 +2,7 @@ import { Calendar } from "lucide-react";
 
 export default function DeadlinesPage() {
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-4 p-6">
+    <div className="flex min-h-full h-full flex-col items-center justify-center gap-4 p-6" style={{ background: "#dedbd5" }}>
       <div
         className="flex size-14 items-center justify-center rounded-2xl"
         style={{ background: "var(--accent)" }}

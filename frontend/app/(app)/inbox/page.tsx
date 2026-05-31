@@ -4,14 +4,15 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { EmptyDashboard } from "@/components/dashboard/EmptyDashboard";
 import { EmailDetailPanel } from "@/components/inbox/email-detail-panel";
 import { EmailList } from "@/components/inbox/email-list";
 import { SearchBar } from "@/components/inbox/search-bar";
 import { TriageTabs, emptyStateForTab } from "@/components/inbox/triage-tabs";
 import { useEmailKeyboardNav } from "@/components/inbox/use-email-keyboard-nav";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { useConnectedAccounts } from "@/lib/queries/dashboard";
 import { useArchiveEmail, useEmailCounts, useEmails } from "@/lib/queries/emails";
 import type { ConnectedAccount, Email, TriageCategory } from "@/types";
 
@@ -37,10 +38,32 @@ function InboxPageContent() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showAutoArchived, setShowAutoArchived] = useState(false);
+  // Synchronous check from localStorage so we never show a loading delay
+  // when the user hasn't connected any account yet.
+  const [cachedHasAccounts, setCachedHasAccounts] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("inboxiq-has-accounts") === "true";
+  });
 
+  const accountsQuery = useConnectedAccounts();
   const emailsQuery = useEmails({ category: tab, search: q || undefined, senderSearch: senderSearch || undefined });
   const countsQuery = useEmailCounts();
   const archiveMutation = useArchiveEmail();
+
+  const connectedAccounts = accountsQuery.data?.filter((a) => !a.disconnected_at) ?? [];
+
+  // Persist result to localStorage whenever the query resolves so future
+  // renders can skip the network wait entirely.
+  useEffect(() => {
+    if (accountsQuery.data === undefined) return;
+    const has = connectedAccounts.length > 0;
+    localStorage.setItem("inboxiq-has-accounts", String(has));
+    setCachedHasAccounts(has);
+  }, [accountsQuery.data, connectedAccounts.length]);
+
+  // While the query is still in flight use the cached value; once it
+  // resolves use the real result so stale cache can't get stuck.
+  const noAccounts = accountsQuery.isLoading ? !cachedHasAccounts : connectedAccounts.length === 0;
 
   const emails = useMemo(
     () => emailsQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -108,6 +131,8 @@ function InboxPageContent() {
     searchInputRef,
   );
 
+  if (noAccounts) return <EmptyDashboard />;
+
   return (
     <div className="flex h-full flex-col">
       <header className="space-y-4 border-b px-6 py-5">
@@ -134,10 +159,19 @@ function InboxPageContent() {
 
       <section className="flex-1 px-6 py-4">
         {emailsQuery.isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-[88px] w-full" />
-            <Skeleton className="h-[88px] w-full" />
-            <Skeleton className="h-[88px] w-full" />
+          <div className="flex flex-col items-center justify-center gap-4 pt-12" style={{ background: "#dedbd5", borderRadius: "0.75rem", padding: "3rem 1.5rem" }}>
+            <div className="relative h-[160px] w-[124px] overflow-hidden">
+              <video
+                src="/bun-search.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                aria-label="Bun searching through emails"
+                className="absolute left-1/2 top-0 h-full w-auto max-w-none -translate-x-1/2 mix-blend-multiply"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">Loading your inbox…</p>
           </div>
         ) : (
           <>

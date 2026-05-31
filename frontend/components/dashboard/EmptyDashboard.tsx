@@ -8,16 +8,18 @@ import { cn } from "@/lib/utils";
 
 export function EmptyDashboard() {
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-[18px] p-6">
-      <video
-        src="/bun-idle.mp4"
-        autoPlay
-        loop
-        muted
-        playsInline
-        aria-label="Bun holding an empty envelope, waiting for your inbox"
-        className="w-[128px] object-contain"
-      />
+    <div className="flex min-h-full h-full flex-col items-center justify-center gap-[18px] p-6" style={{ background: "#dedbd5" }}>
+      <div className="relative h-[200px] w-[154px] overflow-hidden" style={{ background: "#dedbd5" }}>
+        <video
+          src="/bun-idle.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-label="Bun holding an empty envelope, waiting for your inbox"
+          className="absolute left-1/2 top-0 h-full w-auto max-w-none -translate-x-1/2 mix-blend-multiply"
+        />
+      </div>
 
       <h1 className="font-serif text-[28px] font-normal leading-tight text-foreground">
         Your inbox is waiting
