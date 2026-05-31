@@ -4,6 +4,21 @@
 
 ---
 
+## Live Deployment
+
+| Surface     | URL                                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| Frontend    | <https://tingting-silk.vercel.app>                                                                   |
+| Backend API | <https://inboxiq-api-production.up.railway.app>                                                      |
+| Healthcheck | <https://inboxiq-api-production.up.railway.app/health>                                               |
+
+> The Google OAuth consent screen is in **Testing** mode for this class
+> project. Your Gmail address must be added to the **Test users** list
+> in Google Cloud Console before "Connect Gmail" will succeed — contact
+> the proposer (Ting Li) or developer (John Huang) to be added.
+
+---
+
 ## Overview
 
 InboxIQ aggregates all your email accounts into one intelligent
@@ -109,35 +124,41 @@ inboxiq/
 
 ## Development Timeline (2 Weeks)
 
-> **Mid-point check completed: May 4, 2026.**
-> Developer is **behind schedule**. Check-ins 2 and 3 are not met. See bug issues #12–#17 for detailed findings.
+> **Final delivery completed: May 30, 2026.**
+> All mid-point blocker bugs (#12–#17) and open feature issues (#4–#10)
+> have been resolved. App is deployed to production and demo-ready.
 
 | Milestone             | Deadline             | Status | Required Progress                                                                                                                             | Acceptance Gate                                                | Notes |
 | --------------------- | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----- |
-| ✅ **Check-in 1**     | End of Week 1, Day 3 | **Partial** | OAuth login working for Gmail; emails fetched and stored in DB; project deployed to staging URL; ARCHITECTURE.md submitted | Proposer reviews Architecture PR within 48 hours | ARCHITECTURE.md merged (PR #2). Gmail OAuth merged late (PR #11, May 2). Emails are **not stored in DB** — fetched live only. No staging deployment confirmed. |
-| ❌ **Check-in 2**     | End of Week 1, Day 6 | **Not met** | AI triage pipeline working (3-category classification + summary); context mode switcher functional; unified inbox page live on staging | Proposer conducts acceptance test on inbox triage accuracy | No AI triage exists. No context switcher. No `/inbox` page. OpenAI not integrated. See bugs [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12), [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13), [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14). |
-| ❌ **Check-in 3**     | End of Week 2, Day 3 | **Not met** | Package tracker complete with auto-detection and mark-as-used; deadline extraction working; contact tagging functional; all MVP issues closed | Proposer files bug reports; developer resolves within 48 hours | Package tracker missing (bug [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15)). Dashboard missing (bug [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16)). DB schema incomplete (bug [#17](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/17)). Issues #4–#10 all still open. |
-| 🏁 **Final Delivery** | End of Week 2        | **At risk** | All MVP features polished and deployed to production URL; README updated; tests passing; demo-ready                                           | Final acceptance test by proposer; GIX Bucks paid on approval  | 6 blocker bugs filed (issues #12–#17). Developer must resolve all blockers and complete open issues #4–#10 to qualify for final payment. |
+| ✅ **Check-in 1**     | End of Week 1, Day 3 | **Met (late)** | OAuth login working for Gmail; emails fetched and stored in DB; project deployed to staging URL; ARCHITECTURE.md submitted | Proposer reviews Architecture PR within 48 hours | ARCHITECTURE.md merged (PR #2). Gmail OAuth merged May 2 (PR #11). Emails are now persisted to the `emails` table via the sync pipeline. |
+| ✅ **Check-in 2**     | End of Week 1, Day 6 | **Met (late)** | AI triage pipeline working (3-category classification + summary); context mode switcher functional; unified inbox page live on staging | Proposer conducts acceptance test on inbox triage accuracy | AI triage pipeline live (`backend/app/services/triage.py`); context switcher renders triage per mode; `/inbox` page deployed. Bugs [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12), [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13), [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14) closed. |
+| ✅ **Check-in 3**     | End of Week 2, Day 3 | **Met** | Package tracker complete with auto-detection and mark-as-used; deadline extraction working; contact tagging functional; all MVP issues closed | Proposer files bug reports; developer resolves within 48 hours | `/packages` ships with auto-detected pickup codes and Mark as Used. Deadline extraction surfaces on dashboard. `/contacts` tagging highlights senders in `/inbox`. Bugs [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15), [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16), [#17](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/17) closed. Issues #4–#10 closed. |
+| 🏁 **Final Delivery** | End of Week 2        | **Delivered** | All MVP features polished and deployed to production URL; README updated; tests passing; demo-ready                                           | Final acceptance test by proposer; GIX Bucks paid on approval  | Frontend deployed at <https://tingting-silk.vercel.app>; backend at <https://inboxiq-api-production.up.railway.app>. All 6 blocker bugs and 7 feature issues closed. Ready for proposer acceptance test. |
 
-### Mid-Point Assessment (May 4, 2026)
+### Final Status (May 30, 2026)
 
-**What is working:**
-- Supabase magic-link authentication (`/login`)
-- Gmail OAuth 2.0 flow (connect account, token stored in `connected_accounts`)
-- Basic email metadata fetch (subject, sender, snippet — up to 15 messages)
+**What is working in production:**
+- Supabase magic-link authentication (`/auth/sign-in`)
+- Gmail OAuth 2.0 flow with token storage in `connected_accounts`
+- Email sync pipeline persisting messages (subject, sender, body, snippet) to the `emails` table
+- AI triage pipeline: 3-category classification (Action Required / Worth Reading / Auto-Archive) + summary + deadline extraction
+- Context mode switcher (Daily / Job Hunting / Shopping / School) with per-mode retriage
+- Unified `/inbox` page with triage badges and AI summaries
+- `/packages` pickup-code tracker with auto-detection and Mark as Used
+- `/contacts` tagging with sender highlights in `/inbox`
+- `/` dashboard with daily digest, deadlines, and pickup strip
+- Background scheduler + AI worker running continuously on Railway
 
-**What is missing (all blockers):**
+**Mid-point blockers — all resolved:**
 
-| Bug | Issue | Severity |
-| --- | ----- | -------- |
-| [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12) AI triage badges and summaries absent | #5 | Blocker |
-| [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13) Context mode switcher absent | #5 | Blocker |
-| [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14) Email body not fetched; no OpenAI client | #5 #6 #8 | Blocker |
-| [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15) Package tracker page missing | #8 | Blocker |
-| [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16) Dashboard home page missing | #9 | Blocker |
-| [#17](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/17) `emails` and `contact_tags` DB tables not created | #4–#8 | Blocker |
-
-All 6 bugs must be resolved within 48 hours per contract terms.
+| Bug | Issue | Resolution |
+| --- | ----- | ---------- |
+| [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12) AI triage badges and summaries absent | #5 | ✅ Closed — triage pipeline shipped |
+| [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13) Context mode switcher absent | #5 | ✅ Closed — switcher live on `/inbox` |
+| [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14) Email body not fetched; no OpenAI client | #5 #6 #8 | ✅ Closed — body fetched in sync; OpenAI client in `app/services/openai_client.py` |
+| [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15) Package tracker page missing | #8 | ✅ Closed — `/packages` page deployed |
+| [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16) Dashboard home page missing | #9 | ✅ Closed — `/` dashboard deployed |
+| [#17](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/17) `emails` and `contact_tags` DB tables not created | #4–#8 | ✅ Closed — migrations 001–021 applied |
 
 ---
 
@@ -165,16 +186,16 @@ Each issue has its own detailed acceptance criteria.
 High-level gates for final delivery:
 
 - [x] User can connect at least 1 Gmail account via OAuth ✅ working
-- [ ] All emails displayed in unified inbox with triage badges ❌ bug [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12)
-- [ ] Switching context mode visibly changes triage results ❌ bug [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13)
-- [ ] AI summary visible on every email card ❌ bug [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12), [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14)
-- [ ] At least 1 deadline correctly extracted from a real email ❌ not implemented
-- [ ] Pickup code auto-detected from a real Amazon/FedEx email ❌ bug [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15)
-- [ ] Mark as Used archives the source email ❌ not implemented
-- [ ] Contact tag visually highlights emails from tagged sender ❌ not implemented
-- [ ] Daily digest shows on dashboard home ❌ bug [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16)
-- [ ] App deployed to public production URL ❌ issue [#10](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/10) open
-- [ ] No critical bugs open at time of final delivery ❌ 6 blockers filed (issues #12–#17)
+- [x] All emails displayed in unified inbox with triage badges ✅ bug [#12](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/12) closed
+- [x] Switching context mode visibly changes triage results ✅ bug [#13](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/13) closed
+- [x] AI summary visible on every email card ✅ bug [#14](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/14) closed
+- [x] At least 1 deadline correctly extracted from a real email ✅ deadline extraction shipped
+- [x] Pickup code auto-detected from a real Amazon/FedEx email ✅ bug [#15](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/15) closed
+- [x] Mark as Used archives the source email ✅ `/packages` Mark as Used live
+- [x] Contact tag visually highlights emails from tagged sender ✅ `/contacts` tagging live
+- [x] Daily digest shows on dashboard home ✅ bug [#16](https://github.com/GIX-Luyao/final-project-codebase-Ting1016-git/issues/16) closed
+- [x] App deployed to public production URL ✅ <https://tingting-silk.vercel.app>
+- [x] No critical bugs open at time of final delivery ✅ all 6 blockers (issues #12–#17) closed
 
 ---
 
@@ -442,18 +463,18 @@ To apply migrations, paste the output into the **Supabase SQL Editor** for your 
 
 ## Production URLs
 
-Set these after Vercel and Railway finish deploying:
-
-| Surface | URL |
-| ------- | --- |
-| Frontend | `https://<vercel-url>` |
-| Backend API | `https://<railway-url>` |
-| Healthcheck | `https://<railway-url>/health` |
+| Surface     | URL                                                          |
+| ----------- | ------------------------------------------------------------ |
+| Frontend    | <https://tingting-silk.vercel.app>                           |
+| Backend API | <https://inboxiq-api-production.up.railway.app>              |
+| Healthcheck | <https://inboxiq-api-production.up.railway.app/health>       |
 
 Run the production smoke test with:
 
 ```bash
-API_URL=https://<railway-url> FRONTEND_URL=https://<vercel-url> ./scripts/smoke.sh
+API_URL=https://inboxiq-api-production.up.railway.app \
+FRONTEND_URL=https://tingting-silk.vercel.app \
+./scripts/smoke.sh
 ```
 
 ## Demo Prerequisites
@@ -476,7 +497,7 @@ For graders and demo viewers: Google may show a "Google hasn't verified this app
 - Environment variables:
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - `NEXT_PUBLIC_API_URL=https://<railway-url>`
+  - `NEXT_PUBLIC_API_URL=https://inboxiq-api-production.up.railway.app`
   - `NEXT_PUBLIC_SENTRY_DSN` optional
 - Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel.
 
@@ -492,11 +513,11 @@ For graders and demo viewers: Google may show a "Google hasn't verified this app
   - `SUPABASE_JWT_SECRET` only for legacy HS256 tokens, otherwise blank
   - `GMAIL_CLIENT_ID`
   - `GMAIL_CLIENT_SECRET`
-  - `GMAIL_REDIRECT_URI=https://<railway-url>/auth/gmail/callback`
+  - `GMAIL_REDIRECT_URI=https://inboxiq-api-production.up.railway.app/auth/gmail/callback`
   - `OAUTH_STATE_SECRET` random 32+ character string
   - `OPENAI_API_KEY`
-  - `FRONTEND_URL=https://<vercel-url>`
-  - `ALLOWED_ORIGINS=https://<vercel-url>,http://localhost:3000`
+  - `FRONTEND_URL=https://tingting-silk.vercel.app`
+  - `ALLOWED_ORIGINS=https://tingting-silk.vercel.app,http://localhost:3000`
   - `ENVIRONMENT=production`
   - `LOG_LEVEL=info`
   - `GIT_SHA` set from `$RAILWAY_GIT_COMMIT_SHA` in the build/deploy environment
@@ -505,19 +526,19 @@ For graders and demo viewers: Google may show a "Google hasn't verified this app
 ### Google Cloud Console
 
 - OAuth 2.0 Client -> Authorized redirect URIs:
-  - `https://<railway-url>/auth/gmail/callback`
+  - `https://inboxiq-api-production.up.railway.app/auth/gmail/callback`
   - keep `http://localhost:8000/auth/gmail/callback` for development
 - OAuth consent screen:
   - Testing mode is acceptable for this class project.
-  - Add demo viewer Gmail addresses to the **Test users** list.
+  - Add demo viewer Gmail addresses to the **Test users** list (Google Cloud Console → APIs & Services → OAuth consent screen → Test users).
 
 ### Supabase
 
 - Apply all migrations in `backend/supabase/migrations/` to the production project, currently `001` through `021`.
 - Authentication -> URL Configuration:
-  - Site URL: `https://<vercel-url>`
+  - Site URL: `https://tingting-silk.vercel.app`
   - Redirect URLs:
-    - `https://<vercel-url>/auth/callback`
+    - `https://tingting-silk.vercel.app/auth/callback`
     - `http://localhost:3000/auth/callback`
 
 ## Production Verification
