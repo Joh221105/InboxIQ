@@ -132,6 +132,23 @@ function SettingsPageContent() {
     }
   }
 
+  async function saveProfile() {
+    setSavingSettings(true);
+    try {
+      const updated = await apiFetch<User>("/users/me/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ display_name: displayName.trim() || null }),
+      });
+      setUser(updated);
+      setDisplayName(updated.display_name ?? "");
+      toast.success("Name saved");
+    } catch {
+      toast.error("Failed to save name");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
   async function saveSettings() {
     setSavingSettings(true);
     const days = retentionDays.trim() ? Number(retentionDays) : null;
@@ -139,13 +156,11 @@ function SettingsPageContent() {
       const updated = await apiFetch<User>("/users/me/settings", {
         method: "PATCH",
         body: JSON.stringify({
-          display_name: displayName.trim() || null,
           notification_tag_preferences: notificationPrefs,
           data_retention_days: days,
         }),
       });
       setUser(updated);
-      setDisplayName(updated.display_name ?? "");
       setNotificationPrefs(updated.notification_tag_preferences ?? {});
       setRetentionDays(updated.data_retention_days ? String(updated.data_retention_days) : "");
       toast.success("Settings saved");
@@ -192,7 +207,7 @@ function SettingsPageContent() {
               Used in your greeting. Leave blank to use your email.
             </p>
           </div>
-          <Button onClick={saveSettings} disabled={savingSettings} size="sm">
+          <Button onClick={saveProfile} disabled={savingSettings} size="sm">
             {savingSettings ? "Saving..." : "Save"}
           </Button>
         </div>

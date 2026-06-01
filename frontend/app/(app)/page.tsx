@@ -17,9 +17,10 @@ import {
 
 function firstName(displayName: string | null | undefined, email: string | undefined): string {
   if (displayName?.trim()) return displayName.trim().split(/\s+/)[0] ?? displayName.trim();
-  const local = email?.split("@")[0] ?? "there";
-  const cleaned = local.split(/[._-]/)[0] ?? local;
-  return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "there";
+  const local = (email?.split("@")[0] ?? "").replace(/\d+$/, "");
+  const part = local.split(/[._-]/)[0] ?? "";
+  if (!part || part.length > 8) return "there";
+  return part.charAt(0).toUpperCase() + part.slice(1);
 }
 
 function greeting(): string {
