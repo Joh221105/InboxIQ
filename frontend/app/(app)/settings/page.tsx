@@ -21,13 +21,6 @@ import { Switch } from "@/components/ui/switch";
 import { apiFetch } from "@/lib/api";
 import type { ConnectedAccount, EmailDataDeleteCounts, User } from "@/types";
 
-const CONTEXTS: User["default_context"][] = [
-  "Job Hunting",
-  "Shopping",
-  "School Application",
-  "Daily",
-];
-
 const NOTIFICATION_TAGS = [
   { key: "professor", label: "Professor" },
   { key: "friend", label: "Friend" },
@@ -111,22 +104,6 @@ function SettingsPageContent() {
       setAccounts((prev) => prev.filter((a) => a.id !== account.id));
     } catch {
       toast.error(`Failed to disconnect ${account.email_address}`);
-    }
-  }
-
-  async function updateDefaultContext(context: User["default_context"]) {
-    const previous = user;
-    if (previous) setUser({ ...previous, default_context: context });
-    try {
-      const response = await apiFetch<{ user: User }>("/users/me/context", {
-        method: "PATCH",
-        body: JSON.stringify({ context }),
-      });
-      setUser(response.user);
-      toast.success("Default context updated");
-    } catch {
-      if (previous) setUser(previous);
-      toast.error("Failed to update default context");
     }
   }
 
@@ -224,24 +201,6 @@ function SettingsPageContent() {
             })}
           </ul>
         )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Default context</h2>
-        <div className="flex flex-wrap gap-2">
-          {CONTEXTS.map((context) => (
-            <Button
-              key={context}
-              type="button"
-              size="sm"
-              variant={user?.default_context === context ? "default" : "outline"}
-              disabled={!user}
-              onClick={() => updateDefaultContext(context)}
-            >
-              {context}
-            </Button>
-          ))}
-        </div>
       </section>
 
       <section className="space-y-3">
