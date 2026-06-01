@@ -6,9 +6,8 @@ import {
   Home,
   Inbox,
   Package,
-  Calendar,
-  Plus,
   Settings,
+  Plus,
   Sun,
   Moon,
 } from "lucide-react";
@@ -19,11 +18,10 @@ import { useConnectedAccounts } from "@/lib/queries/dashboard";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
-  { href: "/",          label: "Home",             icon: Home },
-  { href: "/inbox",     label: "Inbox",            icon: Inbox },
-  { href: "/packages",  label: "Pickup Codes",     icon: Package },
-  { href: "/deadlines", label: "Deadlines",        icon: Calendar },
-  { href: "/settings",  label: "Settings",         icon: Settings },
+  { href: "/",         label: "Home",         icon: Home },
+  { href: "/inbox",    label: "Inbox",        icon: Inbox },
+  { href: "/packages", label: "Pickup Codes", icon: Package },
+  { href: "/settings", label: "Settings",     icon: Settings },
 ];
 
 export function AppNav() {
@@ -56,7 +54,7 @@ export function AppNav() {
       </div>
 
       {/* nav items */}
-      <div className="flex flex-col gap-0.5 px-3">
+      <div className="flex flex-col gap-1 px-3">
         {NAV_LINKS.map((link) => {
           const active =
             link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
@@ -68,7 +66,7 @@ export function AppNav() {
               href={link.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex h-[38px] items-center gap-[11px] rounded-[calc(var(--radius)-3px)] px-3 text-sm transition-colors duration-150",
+                "relative flex h-[44px] items-center gap-[11px] rounded-[calc(var(--radius)-3px)] px-3 text-sm transition-colors duration-150",
                 active
                   ? "bg-accent font-semibold text-accent-foreground"
                   : "font-medium text-muted-foreground hover:bg-accent/55 hover:text-foreground",
