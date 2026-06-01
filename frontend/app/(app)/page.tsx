@@ -15,14 +15,6 @@ import {
   useUserContext,
 } from "@/lib/queries/dashboard";
 
-function firstName(displayName: string | null | undefined, email: string | undefined): string {
-  if (displayName?.trim()) return displayName.trim().split(/\s+/)[0] ?? displayName.trim();
-  const local = (email?.split("@")[0] ?? "").replace(/\d+$/, "");
-  const part = local.split(/[._-]/)[0] ?? "";
-  if (!part || part.length > 8) return "there";
-  return part.charAt(0).toUpperCase() + part.slice(1);
-}
-
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -67,7 +59,7 @@ export default function HomePage() {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">
-            {greeting()}, {firstName(user.data?.display_name, user.data?.email)}
+            {greeting()}
           </h1>
           <p className="text-sm text-muted-foreground">Your inbox briefing is ready.</p>
         </div>

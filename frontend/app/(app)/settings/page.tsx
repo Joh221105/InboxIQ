@@ -58,7 +58,6 @@ function SettingsPageContent() {
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [displayName, setDisplayName] = useState<string>("");
   const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({});
   const [retentionDays, setRetentionDays] = useState<string>("");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -81,7 +80,6 @@ function SettingsPageContent() {
     apiFetch<User>("/users/me")
       .then((loadedUser) => {
         setUser(loadedUser);
-        setDisplayName(loadedUser.display_name ?? "");
         setNotificationPrefs(loadedUser.notification_tag_preferences ?? {});
         setRetentionDays(
           loadedUser.data_retention_days ? String(loadedUser.data_retention_days) : "",
@@ -132,23 +130,6 @@ function SettingsPageContent() {
     }
   }
 
-  async function saveProfile() {
-    setSavingSettings(true);
-    try {
-      const updated = await apiFetch<User>("/users/me/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ display_name: displayName.trim() || null }),
-      });
-      setUser(updated);
-      setDisplayName(updated.display_name ?? "");
-      toast.success("Name saved");
-    } catch {
-      toast.error("Failed to save name");
-    } finally {
-      setSavingSettings(false);
-    }
-  }
-
   async function saveSettings() {
     setSavingSettings(true);
     const days = retentionDays.trim() ? Number(retentionDays) : null;
@@ -189,29 +170,6 @@ function SettingsPageContent() {
         <h1 className="text-2xl font-semibold">Settings</h1>
         <Button onClick={connectGmail}>Connect Gmail</Button>
       </div>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Profile</h2>
-        <div className="rounded-lg border p-4 space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="display_name">Display name</Label>
-            <Input
-              id="display_name"
-              type="text"
-              maxLength={80}
-              placeholder={user?.email ?? "Your name"}
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Used in your greeting. Leave blank to use your email.
-            </p>
-          </div>
-          <Button onClick={saveProfile} disabled={savingSettings} size="sm">
-            {savingSettings ? "Saving..." : "Save"}
-          </Button>
-        </div>
-      </section>
 
       <section>
         <h2 className="text-sm font-medium text-muted-foreground mb-3">
