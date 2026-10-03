@@ -15,9 +15,10 @@ from app.models.ai import (
     TriageResult,
 )
 from app.models.email import Email
+from app.models.user import ContextMode
 from app.prompts.extract import ACTION_ITEMS_PROMPT, DEADLINE_PROMPT, PICKUP_CODE_PROMPT
 from app.prompts.triage import TRIAGE_PROMPTS
-from app.services.openai_client import call_json_with_cost
+from app.services.ai_client import call_json_with_cost
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +34,22 @@ PICKUP_PATTERNS = [
 ]
 
 
-def _email_body(email: Email) -> str:
-    return email.body_text or ""
-
-
-def _email_sender(email: Email) -> str:
-    return email.sender or ""
+def triage_message(email: Email) -> str:
+    """User-turn content for triage prompts; email data never enters the system prompt."""
+    return (
+        f"From: {email.sender or ''}\n"
+        f"Subject: {email.subject or ''}\n"
+        f"Body: {(email.body_text or '')[:4000]}"
+    )
 
 
 def pickup_code_prefilter(email: Email) -> bool:
-    text = f"{email.subject or ''} {_email_body(email)[:500]}"
+    text = f"{email.subject or ''} {(email.body_text or '')[:500]}"
     return any(p.search(text) for p in PICKUP_PATTERNS)
 
 
-async def triage_email(email: Email, user_context: str) -> TriageResult:
-    body = _email_body(email)
+async def triage_email(email: Email, user_context: ContextMode) -> TriageResult:
+    body = email.body_text or ""
     if not body.strip():
         return TriageResult(
             category="auto_archive",
@@ -55,10 +57,9 @@ async def triage_email(email: Email, user_context: str) -> TriageResult:
             triage_context=user_context,
         )
 
-    user_msg = f"From: {_email_sender(email)}\nSubject: {email.subject or ''}\nBody: {body[:4000]}"
     triage, triage_cost = await call_json_with_cost(
         system=TRIAGE_PROMPTS[user_context],
-        user=user_msg,
+        user=triage_message(email),
         response_model=TriageResponse,
         kind="triage",
         user_id=email.user_id,

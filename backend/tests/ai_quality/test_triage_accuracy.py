@@ -14,7 +14,7 @@ from app.services.triage import triage_email
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_AI_QUALITY_TESTS") != "1",
-    reason="Set RUN_AI_QUALITY_TESTS=1 to run real OpenAI quality tests.",
+    reason="Set RUN_AI_QUALITY_TESTS=1 to run real LLM quality tests.",
 )
 
 

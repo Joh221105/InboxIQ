@@ -28,9 +28,20 @@ class Settings(BaseSettings):
     environment: str = "dev"
     log_level: str = "INFO"
     allowed_origins: str = ""  # comma-separated; empty → derive from frontend_url
-    token_encryption_key: str | None = None
     sentry_dsn: str | None = None
     git_sha: str = "dev"
+    demo_mode: bool = False  # seed sample emails when a Gmail account connects
+
+    # Secrets whose presence is not reported in startup logs.
+    _UNREPORTED: tuple[str, ...] = ("supabase_service_role_key",)
+
+    def presence_summary(self) -> dict[str, bool]:
+        """Which string settings are populated. Safe to log: contains no values."""
+        return {
+            f"{name}_set": bool(value)
+            for name, value in self.model_dump().items()
+            if not isinstance(value, bool) and name not in self._UNREPORTED
+        }
 
     @property
     def cors_origins(self) -> list[str]:

@@ -6,8 +6,9 @@ from uuid import UUID
 
 import httpx
 import jwt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKSet
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -59,8 +60,6 @@ async def verify_jwt(token: str) -> UserClaims:
         if alg in ("ES256", "RS256"):
             keys = await _fetch_jwks()
             kid = header.get("kid")
-            from jwt import PyJWKSet
-
             jwk_set = PyJWKSet.from_dict({"keys": keys})
             signing_key = None
             for k in jwk_set.keys:
@@ -97,8 +96,11 @@ async def verify_jwt(token: str) -> UserClaims:
 
 
 async def get_current_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> UserClaims:
     if not creds or creds.scheme.lower() != "bearer":
         raise _invalid("Missing bearer token")
-    return await verify_jwt(creds.credentials)
+    claims = await verify_jwt(creds.credentials)
+    request.state.user_id = claims.user_id  # read by the request-logging middleware
+    return claims

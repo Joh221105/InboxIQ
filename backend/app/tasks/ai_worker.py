@@ -9,7 +9,7 @@ from uuid import UUID
 from app.db.emails import apply_triage_result, list_unprocessed_emails, mark_ai_failed
 from app.db.users import get_user
 from app.models.ai import TriageResult
-from app.services.openai_client import AIInvalidResponse, AIServiceUnavailable
+from app.services.ai_client import AIInvalidResponse, AIServiceUnavailable
 from app.services.triage import triage_email
 
 logger = logging.getLogger(__name__)

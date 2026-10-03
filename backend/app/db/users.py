@@ -8,7 +8,7 @@ from postgrest.types import CountMethod
 
 from app.core.errors import NotFoundError
 from app.db.supabase import get_service_client
-from app.models.user import EmailDataDeleteCounts, User, UserSettingsUpdate
+from app.models.user import ContextMode, EmailDataDeleteCounts, User, UserSettingsUpdate
 
 
 def _user_or_404(rows: list[dict[str, Any]]) -> User:
@@ -36,7 +36,7 @@ async def _update_user(user_id: UUID, changes: dict[str, Any]) -> User:
     return _user_or_404(await asyncio.to_thread(_update))
 
 
-async def update_default_context(user_id: UUID, context: str) -> User:
+async def update_default_context(user_id: UUID, context: ContextMode) -> User:
     return await _update_user(user_id, {"default_context": context})
 
 

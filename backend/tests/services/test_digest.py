@@ -8,7 +8,7 @@ import pytest
 
 from app.models.email import Email
 from app.models.user import User
-from app.services.openai_client import AIServiceUnavailable
+from app.services.ai_client import AIServiceUnavailable
 
 
 def _email(subject: str, deadline: str | None = None) -> Email:

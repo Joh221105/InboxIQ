@@ -14,7 +14,7 @@ from app.db.users import get_user
 from app.models.ai import Digest, DigestItem, DigestResponse
 from app.models.email import Email
 from app.prompts.digest import DIGEST_PROMPT
-from app.services.openai_client import AIInvalidResponse, AIServiceUnavailable, call_json
+from app.services.ai_client import AIInvalidResponse, AIServiceUnavailable, call_json
 
 
 def _deadline_value(email: Email) -> str:

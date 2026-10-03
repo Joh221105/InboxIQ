@@ -13,9 +13,11 @@ from app.db.users import update_default_context
 from app.models.ai import TriageResponse
 from app.models.email import Email
 from app.models.job import Job
+from app.models.user import ContextMode
 from app.prompts.triage import TRIAGE_PROMPTS
+from app.services.ai_client import call_json
 from app.services.jobs import JobRegistry
-from app.services.openai_client import call_json
+from app.services.triage import triage_message
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ def _evict_stale_rate_limits() -> None:
         del _last_request_at[user_id]
 
 
-async def start_retriage(user_id: UUID, context: str) -> Job:
+async def start_retriage(user_id: UUID, context: ContextMode) -> Job:
     _evict_stale_rate_limits()
     now = utc_now()
     last = _last_request_at.get(user_id)
@@ -48,19 +50,13 @@ async def start_retriage(user_id: UUID, context: str) -> Job:
     return job
 
 
-async def _process_retriage(job: Job, emails: list[Email], context: str) -> None:
+async def _process_retriage(job: Job, emails: list[Email], context: ContextMode) -> None:
     try:
         for email in emails:
             try:
-                body = email.body_text or ""
-                user_msg = (
-                    f"From: {email.sender or ''}\n"
-                    f"Subject: {email.subject or ''}\n"
-                    f"Body: {body[:4000]}"
-                )
                 triage = await call_json(
                     system=TRIAGE_PROMPTS[context],
-                    user=user_msg,
+                    user=triage_message(email),
                     response_model=TriageResponse,
                     kind="retriage",
                     user_id=email.user_id,

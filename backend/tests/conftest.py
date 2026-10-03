@@ -12,7 +12,7 @@ for key, value in {
     "GMAIL_CLIENT_SECRET": "test-gmail-client-secret",
     "GMAIL_REDIRECT_URI": "http://localhost:8000/auth/gmail/callback",
     "OAUTH_STATE_SECRET": "test-oauth-state-secret-at-least-32-chars!",
-    "OPENAI_API_KEY": "sk-test-openai-key",
+    "OPENROUTER_API_KEY": "test-openrouter-key",
     "FRONTEND_URL": "http://localhost:3000",
 }.items():
     os.environ.setdefault(key, value)

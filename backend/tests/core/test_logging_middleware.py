@@ -2,63 +2,43 @@ from __future__ import annotations
 
 import json
 import logging
-from uuid import UUID
 
 import pytest
-from starlette.datastructures import Headers
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 
-from app.core.auth import UserClaims
 from app.core.config import settings
-from app.core.logging_middleware import (
-    build_request_log,
-    config_presence_summary,
-    resolve_log_user_id,
-)
+from app.core.logging_middleware import build_request_log, request_logging_middleware
 
 
-def test_config_presence_summary_uses_booleans_only() -> None:
-    summary = config_presence_summary(settings)
+def test_presence_summary_reports_only_booleans() -> None:
+    summary = settings.presence_summary()
 
-    assert summary["supabase_set"] is True
-    assert summary["openai_set"] is True
+    assert summary["supabase_url_set"] is True
+    assert summary["openrouter_api_key_set"] is True
+    assert "demo_mode_set" not in summary
     assert all(isinstance(value, bool) for value in summary.values())
 
 
-def test_config_presence_summary_omits_service_role_key_status() -> None:
-    summary = config_presence_summary(settings)
-
-    assert "supabase_service_role_set" not in summary
+def test_presence_summary_omits_service_role_key_status() -> None:
+    assert "supabase_service_role_key_set" not in settings.presence_summary()
 
 
-@pytest.mark.asyncio
-async def test_resolve_log_user_id_returns_valid_bearer_claim(
-    monkeypatch: pytest.MonkeyPatch,
+def test_request_log_includes_user_id_from_request_state(
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    async def fake_verify_jwt(token: str) -> UserClaims:
-        assert token == "valid"
-        return UserClaims(
-            user_id=UUID("12345678-1234-5678-1234-567812345678"),
-            email="demo@example.com",
-        )
+    app = FastAPI()
+    app.middleware("http")(request_logging_middleware)
 
-    monkeypatch.setattr("app.core.logging_middleware.verify_jwt", fake_verify_jwt)
+    @app.get("/whoami")
+    async def whoami(request: Request) -> dict[str, str]:
+        request.state.user_id = "user-123"
+        return {"ok": "yes"}
 
-    user_id = await resolve_log_user_id(Headers({"authorization": "Bearer valid"}))
+    with caplog.at_level(logging.INFO, logger="app.core.logging_middleware"):
+        TestClient(app).get("/whoami")
 
-    assert user_id == "12345678-1234-5678-1234-567812345678"
-
-
-@pytest.mark.asyncio
-async def test_resolve_log_user_id_omits_invalid_or_missing_bearer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def fake_verify_jwt(token: str) -> UserClaims:
-        raise AssertionError("verify_jwt should not run without a bearer token")
-
-    monkeypatch.setattr("app.core.logging_middleware.verify_jwt", fake_verify_jwt)
-
-    assert await resolve_log_user_id(Headers({})) is None
-    assert await resolve_log_user_id(Headers({"authorization": "Basic abc"})) is None
+    assert '"user_id":"user-123"' in caplog.text
 
 
 def test_build_request_log_is_json_serializable(caplog: pytest.LogCaptureFixture) -> None:

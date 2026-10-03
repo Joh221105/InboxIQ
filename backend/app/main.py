@@ -13,10 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.errors import register_error_handlers
-from app.core.logging_middleware import (
-    config_presence_summary,
-    request_logging_middleware,
-)
+from app.core.logging_middleware import request_logging_middleware
 from app.routers import accounts, auth, contacts, digest, emails, jobs, pickup, users
 from app.tasks.ai_worker import run_forever as run_ai_worker
 from app.tasks.scheduler import make_scheduler
@@ -50,7 +47,7 @@ _init_sentry()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    logger.info("config loaded", extra=config_presence_summary(settings))
+    logger.info("config loaded", extra=settings.presence_summary())
     scheduler = make_scheduler()
     scheduler.start()
     ai_worker_task = asyncio.create_task(run_ai_worker())

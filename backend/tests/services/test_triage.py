@@ -9,7 +9,7 @@ import pytest
 
 from app.models.ai import ActionItemsResponse, DeadlineResponse, PickupCodeResponse, TriageResponse
 from app.models.email import Email
-from app.services.openai_client import AIInvalidResponse
+from app.services.ai_client import AIInvalidResponse
 
 
 def _email(subject: str = "Interview", body: str = "Please complete by Friday") -> Email:

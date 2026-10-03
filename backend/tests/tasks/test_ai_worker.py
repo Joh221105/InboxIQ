@@ -10,7 +10,7 @@ import pytest
 from app.models.ai import TriageResult
 from app.models.email import Email
 from app.models.user import User
-from app.services.openai_client import AIServiceUnavailable
+from app.services.ai_client import AIServiceUnavailable
 
 
 def _email(user_id=None) -> Email:

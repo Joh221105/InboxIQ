@@ -1,8 +1,17 @@
+"""LLM access for JSON-producing prompts.
+
+OpenRouter (free tier) is tried first, with Anthropic Claude Haiku as the
+fallback. Every response is parsed as JSON and validated against a Pydantic
+model before use, and every call is recorded in ``ai_usage`` for cost
+tracking.
+"""
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import TypeVar
 from uuid import UUID
@@ -38,6 +47,19 @@ class AIInvalidResponse(Exception):
 
 class AIServiceUnavailable(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class Completion:
+    content: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: Decimal
+
+
+# Free models occasionally wrap or truncate JSON; one retry recovers most of those.
+_JSON_ATTEMPTS = 2
 
 
 def _get_openrouter_client() -> AsyncOpenAI:
@@ -78,23 +100,20 @@ def _extract_json(text: str) -> str:
 
 
 async def _record_usage(
+    completion: Completion,
     *,
+    kind: str,
     user_id: UUID,
     email_id: UUID | None,
-    kind: str,
-    model: str,
-    prompt_tokens: int,
-    completion_tokens: int,
-    cost_usd: Decimal,
 ) -> None:
     payload = {
         "user_id": str(user_id),
         "email_id": str(email_id) if email_id else None,
         "kind": kind,
-        "model": model,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "cost_usd": str(cost_usd),
+        "model": completion.model,
+        "prompt_tokens": completion.prompt_tokens,
+        "completion_tokens": completion.completion_tokens,
+        "cost_usd": str(completion.cost_usd),
     }
 
     def _insert() -> None:
@@ -103,6 +122,7 @@ async def _record_usage(
     try:
         await asyncio.to_thread(_insert)
     except Exception:
+        # Usage tracking must never fail the AI call it describes.
         logger.exception("failed to write ai_usage kind=%s user_id=%s", kind, user_id)
 
 
@@ -146,23 +166,18 @@ async def _completion_anthropic(system: str, user: str) -> tuple[str, int, int]:
     return content, resp.usage.input_tokens, resp.usage.output_tokens
 
 
-async def _completion(system: str, user: str) -> tuple[str, int, int, str, Decimal]:
-    """Try OpenRouter first, fall back to Anthropic.
-
-    Returns (content, prompt_tokens, completion_tokens, model_name, cost_usd).
-    OpenRouter free tier has zero cost.
-    """
+async def _completion(system: str, user: str) -> Completion:
+    """Try OpenRouter first, then fall back to Anthropic."""
     if settings.openrouter_api_key:
         try:
             content, pt, ct = await _completion_openrouter(system, user)
-            return content, pt, ct, OPENROUTER_MODEL, Decimal("0")
+            return Completion(content, OPENROUTER_MODEL, pt, ct, Decimal(0))
         except AIServiceUnavailable:
             logger.warning("openrouter unavailable, falling back to anthropic")
 
     if settings.anthropic_api_key:
         content, pt, ct = await _completion_anthropic(system, user)
-        cost = _usage_cost_anthropic(pt, ct)
-        return content, pt, ct, ANTHROPIC_MODEL, cost
+        return Completion(content, ANTHROPIC_MODEL, pt, ct, _usage_cost_anthropic(pt, ct))
 
     raise AIServiceUnavailable(
         "no AI provider configured — set OPENROUTER_API_KEY or ANTHROPIC_API_KEY"
@@ -204,42 +219,26 @@ async def call_json_with_cost(
     user_id: UUID,
     email_id: UUID | None = None,
 ) -> tuple[T, Decimal]:
-    raw, prompt_tokens, completion_tokens, model_used, cost = await _completion(system, user)
-    await _record_usage(
-        user_id=user_id,
-        email_id=email_id,
-        kind=kind,
-        model=model_used,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        cost_usd=cost,
-    )
-
-    try:
-        data = json.loads(_extract_json(raw))
-    except json.JSONDecodeError:
-        # Retry the completion once before giving up
-        raw, prompt_tokens, completion_tokens, model_used, cost2 = await _completion(system, user)
-        cost += cost2
-        await _record_usage(
-            user_id=user_id,
-            email_id=email_id,
-            kind=kind,
-            model=model_used,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cost_usd=cost2,
-        )
+    total_cost = Decimal(0)
+    raw = ""
+    for _attempt in range(_JSON_ATTEMPTS):
+        completion = await _completion(system, user)
+        total_cost += completion.cost_usd
+        await _record_usage(completion, kind=kind, user_id=user_id, email_id=email_id)
+        raw = completion.content
         try:
             data = json.loads(_extract_json(raw))
-        except json.JSONDecodeError as exc:
-            logger.warning("invalid json from ai kind=%s raw=%s", kind, raw)
-            raise AIInvalidResponse(str(exc)) from exc
+            break
+        except json.JSONDecodeError:
+            continue
+    else:
+        # Log a short sample only: responses can contain email content.
+        logger.warning("ai returned invalid json kind=%s sample=%r", kind, raw[:200])
+        raise AIInvalidResponse("model did not return valid JSON")
 
     try:
         parsed = response_model.model_validate(data)
     except ValidationError as exc:
-        logger.warning("invalid ai response kind=%s raw=%s err=%s", kind, raw, exc)
+        logger.warning("ai response failed validation kind=%s err=%s", kind, exc)
         raise AIInvalidResponse(str(exc)) from exc
-
-    return parsed, cost
+    return parsed, total_cost
