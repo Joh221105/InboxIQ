@@ -7,6 +7,7 @@ shaped as ``{"detail": {"code": ..., "message": ...}}``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from fastapi import FastAPI, Request
@@ -60,7 +61,7 @@ class RateLimitedError(AppError):
 
 
 def _envelope(
-    status_code: int, detail: dict[str, Any], headers: dict[str, str] | None = None
+    status_code: int, detail: dict[str, Any], headers: Mapping[str, str] | None = None
 ) -> JSONResponse:
     return JSONResponse(status_code=status_code, content={"detail": detail}, headers=headers)
 
