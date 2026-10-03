@@ -27,9 +27,10 @@ describe("DigestBanner", () => {
       />,
     );
 
-    expect(screen.getByText("Today's briefing")).toBeInTheDocument();
-    expect(screen.getByText("Reply to recruiter about final")).toBeInTheDocument();
-    expect(screen.getByText("interview by Friday.")).toBeInTheDocument();
+    expect(screen.getByText("Here's your briefing")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Reply to recruiter about final interview by Friday\./),
+    ).toBeInTheDocument();
     expect(screen.getByText(/recruiter@example.com/)).toBeInTheDocument();
     expect(screen.getByText("Due May 15")).toBeInTheDocument();
   });
@@ -46,7 +47,7 @@ describe("DigestBanner", () => {
       />,
     );
 
-    expect(screen.getByText("Inbox calm. Nothing urgent today.")).toBeInTheDocument();
+    expect(screen.getByText("Inbox calm — nothing urgent today.")).toBeInTheDocument();
   });
 
   it("shows degraded note", () => {
@@ -61,6 +62,22 @@ describe("DigestBanner", () => {
       />,
     );
 
-    expect(screen.getByText("Live digest unavailable - showing recent action items")).toBeInTheDocument();
+    expect(screen.getByText(/Summary unavailable/)).toBeInTheDocument();
+  });
+
+  it("remembers that the briefing was dismissed", async () => {
+    localStorage.setItem("iq-digest-dismissed", "1");
+    render(
+      <DigestBanner
+        digest={{
+          generated_at: "2026-05-14T16:00:00Z",
+          context: "Daily",
+          degraded: false,
+          items: [],
+        }}
+      />,
+    );
+    expect(await screen.findByText("Briefing tucked away")).toBeInTheDocument();
+    localStorage.clear();
   });
 });

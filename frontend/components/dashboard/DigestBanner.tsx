@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { ChevronDown, ArrowRight, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Bun } from "@/components/bun";
@@ -10,6 +10,22 @@ import { Badge } from "@/components/ui/badge";
 import type { Digest, DigestItem } from "@/types";
 
 const STORAGE_KEY = "iq-digest-dismissed";
+
+function readDismissed(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "1";
+  } catch {
+    return false; // storage unavailable (private mode, blocked cookies)
+  }
+}
+
+function writeDismissed(value: boolean): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, value ? "1" : "0");
+  } catch {
+    // Non-essential preference; ignore storage failures.
+  }
+}
 
 function deadlineLabel(deadline: string | null): string | null {
   if (!deadline) return null;
@@ -64,9 +80,12 @@ export function DigestBanner({
 }: {
   digest: Digest | null | undefined;
 }) {
-  const [dismissed, setDismissed] = useState(
-    () => typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY) === "1",
-  );
+  // Read after mount: the server always renders the expanded banner, so reading
+  // storage during the first render would cause a hydration mismatch.
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    setDismissed(readDismissed());
+  }, []);
   const [expanded, setExpanded] = useState(false);
 
   const generatedAt = digest?.generated_at ? new Date(digest.generated_at) : new Date();
@@ -80,11 +99,11 @@ export function DigestBanner({
 
   function dismiss() {
     setDismissed(true);
-    localStorage.setItem(STORAGE_KEY, "1");
+    writeDismissed(true);
   }
   function restore() {
     setDismissed(false);
-    localStorage.setItem(STORAGE_KEY, "0");
+    writeDismissed(false);
   }
 
   /* Dismissed — slim restore strip */
@@ -170,15 +189,6 @@ export function DigestBanner({
                   className="size-[13px] transition-transform duration-150"
                   style={{ transform: expanded ? "rotate(180deg)" : "none" }}
                 />
-              </button>
-              <button
-                type="button"
-                onClick={() => {}}
-                className="flex h-6 items-center gap-1 text-[13px] font-medium transition-colors duration-150"
-                style={{ color: "var(--primary)" }}
-              >
-                Open full briefing
-                <ArrowRight className="size-[13px]" />
               </button>
             </div>
           )}

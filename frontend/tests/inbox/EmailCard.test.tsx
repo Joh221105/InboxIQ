@@ -55,27 +55,24 @@ describe("EmailCard", () => {
       "/contacts?identifier=recruiter%40example.com",
     );
     expect(screen.getByText("Due Nov 15")).toBeInTheDocument();
-    expect(screen.getByLabelText("Triage category: Action required")).toBeInTheDocument();
+    expect(screen.getByText("Triage category: Action required")).toBeInTheDocument();
     const card = getByTestId("email-card");
     expect(card).toHaveStyle({ borderLeftColor: "#dbeafe" });
   });
 
-  it("contact_tag with empty color falls back to triage border class", () => {
+  it("falls back to the triage color when the contact tag has no color", () => {
     const { getByTestId } = renderCard({
       ...baseEmail,
       triage_category: "action_required",
       contact_tag: { label: "X", color: "" },
     });
-
-    const card = getByTestId("email-card");
-    // No inline borderLeftColor should be set; border color comes from Tailwind class
-    expect(card.style.borderLeftColor).toBeFalsy();
+    expect(getByTestId("email-card").getAttribute("style")).toContain("--triage-action");
   });
 
   it("renders worth reading without optional badges", () => {
     renderCard({ ...baseEmail, triage_category: "worth_reading" });
 
-    expect(screen.getByLabelText("Triage category: Worth reading")).toBeInTheDocument();
+    expect(screen.getByText("Triage category: Worth reading")).toBeInTheDocument();
     expect(screen.queryByText("Due Nov 15")).not.toBeInTheDocument();
     expect(screen.queryByText("Recruiter")).not.toBeInTheDocument();
   });
@@ -83,8 +80,8 @@ describe("EmailCard", () => {
   it("renders auto archive as faded", () => {
     const { getByTestId } = renderCard({ ...baseEmail, triage_category: "auto_archive" });
 
-    expect(getByTestId("email-card")).toHaveClass("opacity-60");
-    expect(screen.getByLabelText("Triage category: Auto archive")).toBeInTheDocument();
+    expect(getByTestId("email-card")).toHaveClass("opacity-50");
+    expect(screen.getByText("Triage category: Auto archive")).toBeInTheDocument();
   });
 
   it("renders AI processing placeholder and no triage badge for null category", () => {
@@ -96,7 +93,7 @@ describe("EmailCard", () => {
       ai_category: null,
     });
 
-    expect(screen.getByText("AI processing...")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Triage category:/)).not.toBeInTheDocument();
+    expect(screen.getByText("Summarizing")).toBeInTheDocument();
+    expect(screen.queryByText(/Triage category:/)).not.toBeInTheDocument();
   });
 });

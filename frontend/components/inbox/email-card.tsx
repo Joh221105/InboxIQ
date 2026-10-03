@@ -22,6 +22,12 @@ function categoryFor(email: Email): TriageCategory | null {
   return null;
 }
 
+const CATEGORY_LABELS: Record<TriageCategory, string> = {
+  action_required: "Action required",
+  worth_reading: "Worth reading",
+  auto_archive: "Auto archive",
+};
+
 function edgeBorderColor(
   category: TriageCategory | null,
   tagColor: string | undefined,
@@ -73,6 +79,10 @@ export function EmailCard({
 
       {/* col 2 — content */}
       <div className="min-w-0 flex flex-col gap-[3px]">
+        {/* The border color is the only visual category cue; expose it to screen readers. */}
+        {category ? (
+          <span className="sr-only">Triage category: {CATEGORY_LABELS[category]}</span>
+        ) : null}
         <div className="flex min-w-0 items-center gap-2">
           {!email.is_read && (
             <span

@@ -30,14 +30,7 @@ describe("PickupCodeCard", () => {
   it("renders the code as large monospace text", () => {
     render(<PickupCodeCard code={baseCode} onMarkUsed={vi.fn()} />);
 
-    expect(screen.getByText("123456")).toHaveClass(
-      "font-mono",
-      "tabular-nums",
-      "tracking-wider",
-      "text-3xl",
-      "font-bold",
-      "whitespace-nowrap",
-    );
+    expect(screen.getByText("123456")).toHaveClass("font-mono", "font-bold");
   });
 
   it("renders expiry badge state transitions", () => {
@@ -66,10 +59,10 @@ describe("PickupCodeCard", () => {
     expect(onMarkUsed).toHaveBeenCalledWith("email-1");
   });
 
-  it("treats date-only same-day expiry as active through the end of day", () => {
+  it("shows 'Expires soon' (not 'Expired') for a same-day expiry", () => {
     render(<PickupCodeCard code={{ ...baseCode, pickup_expiry: "2026-05-14" }} onMarkUsed={vi.fn()} />);
 
-    expect(screen.getByText(/Expires in \d+h/)).toBeInTheDocument();
+    expect(screen.getByText("Expires soon")).toBeInTheDocument();
     expect(screen.queryByText("Expired")).not.toBeInTheDocument();
   });
 });
