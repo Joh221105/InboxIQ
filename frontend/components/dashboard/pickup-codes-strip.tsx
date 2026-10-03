@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { Clock } from "lucide-react";
 
-import { RetailerLogo } from "@/components/packages/RetailerLogo";
+import { RetailerLogo } from "@/components/packages/retailer-logo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMarkPickupUsed } from "@/lib/queries/pickup";

@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+import { mockConnectedAccount } from "./fixtures";
+
 test.use({ storageState: "tests/e2e/storage-state.json" });
 
 test("unified inbox supports preview, tabs, and accurate search filters", async ({ page }) => {
@@ -86,7 +88,12 @@ test("unified inbox supports preview, tabs, and accurate search filters", async 
     await route.fulfill({ json: { items: filtered, next_cursor: null } });
   });
 
+  await mockConnectedAccount(page);
   await page.goto("/inbox");
+  // The All tab collapses auto-archived mail until the user asks to see it.
+  await expect(page.getByTestId("email-card")).toHaveCount(1);
+  await expect(page.getByText("1 auto-archived emails collapsed")).toBeVisible();
+  await page.getByRole("button", { name: "Show auto-archived" }).click();
   await expect(page.getByTestId("email-card")).toHaveCount(2);
 
   await page.getByTestId("email-card").first().click();

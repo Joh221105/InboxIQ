@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DigestBanner } from "@/components/dashboard/DigestBanner";
+import { DigestBanner } from "@/components/dashboard/digest-banner";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),

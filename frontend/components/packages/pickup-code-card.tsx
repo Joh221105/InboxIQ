@@ -2,8 +2,8 @@ import { MapPin, Clock, Check, QrCode } from "lucide-react";
 import { useState } from "react";
 import QRCode from "react-qr-code";
 
-import { ExpiryBadge } from "@/components/packages/ExpiryBadge";
-import { RetailerLogo } from "@/components/packages/RetailerLogo";
+import { ExpiryBadge } from "@/components/packages/expiry-badge";
+import { RetailerLogo } from "@/components/packages/retailer-logo";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PickupCode } from "@/types";

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { RetailerLogo } from "@/components/packages/RetailerLogo";
+import { RetailerLogo } from "@/components/packages/retailer-logo";
 
 describe("RetailerLogo", () => {
   it("resolves amazon.com sender domains to Amazon", () => {

@@ -1,10 +1,10 @@
 import { PackageIcon } from "lucide-react";
 
-import { AmazonLogo } from "@/components/packages/logos/AmazonLogo";
-import { DhlLogo } from "@/components/packages/logos/DhlLogo";
-import { FedExLogo } from "@/components/packages/logos/FedExLogo";
-import { UpsLogo } from "@/components/packages/logos/UpsLogo";
-import { UspsLogo } from "@/components/packages/logos/UspsLogo";
+import { AmazonLogo } from "@/components/packages/logos/amazon-logo";
+import { DhlLogo } from "@/components/packages/logos/dhl-logo";
+import { FedExLogo } from "@/components/packages/logos/fedex-logo";
+import { UpsLogo } from "@/components/packages/logos/ups-logo";
+import { UspsLogo } from "@/components/packages/logos/usps-logo";
 
 type Retailer = "amazon" | "fedex" | "ups" | "usps" | "dhl";
 

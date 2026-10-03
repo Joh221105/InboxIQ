@@ -1,10 +1,10 @@
 "use client";
 
-import { ContextSwitcher } from "@/components/dashboard/ContextSwitcher";
-import { DigestBanner } from "@/components/dashboard/DigestBanner";
-import { EmptyDashboard } from "@/components/dashboard/EmptyDashboard";
-import { PickupCodesStrip } from "@/components/dashboard/PickupCodesStrip";
-import { UpcomingDeadlinesPanel } from "@/components/dashboard/UpcomingDeadlinesPanel";
+import { ContextSwitcher } from "@/components/dashboard/context-switcher";
+import { DigestBanner } from "@/components/dashboard/digest-banner";
+import { EmptyDashboard } from "@/components/dashboard/empty-dashboard";
+import { PickupCodesStrip } from "@/components/dashboard/pickup-codes-strip";
+import { UpcomingDeadlinesPanel } from "@/components/dashboard/upcoming-deadlines-panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUpdateContext } from "@/lib/queries/context-switch";
 import {

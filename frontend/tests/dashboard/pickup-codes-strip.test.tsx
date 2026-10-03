@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PickupCodesStrip } from "@/components/dashboard/PickupCodesStrip";
+import { PickupCodesStrip } from "@/components/dashboard/pickup-codes-strip";
 import type { PickupCode } from "@/types";
 
 const mutate = vi.fn();

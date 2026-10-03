@@ -2,7 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 
-import { RetailerLogo } from "@/components/packages/RetailerLogo";
+import { RetailerLogo } from "@/components/packages/retailer-logo";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useUsedPickupCodes } from "@/lib/queries/pickup";
 

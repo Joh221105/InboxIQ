@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ExpiryBadge } from "@/components/packages/ExpiryBadge";
-import { PickupCodeCard } from "@/components/packages/PickupCodeCard";
+import { ExpiryBadge } from "@/components/packages/expiry-badge";
+import { PickupCodeCard } from "@/components/packages/pickup-code-card";
 import type { PickupCode } from "@/types";
 
 const baseCode: PickupCode = {
