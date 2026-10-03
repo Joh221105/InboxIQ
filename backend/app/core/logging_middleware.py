@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Mapping
-from datetime import datetime, timezone
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
+from datetime import UTC, datetime
 
 from fastapi import Request, Response
 from pydantic_settings import BaseSettings
@@ -19,19 +18,11 @@ def config_presence_summary(settings: BaseSettings) -> dict[str, bool]:
     return {
         "supabase_set": bool(getattr(settings, "supabase_url", "")),
         "supabase_anon_set": bool(getattr(settings, "supabase_anon_key", "")),
-        "supabase_jwt_secret_set": bool(
-            getattr(settings, "supabase_jwt_secret", "")
-        ),
+        "supabase_jwt_secret_set": bool(getattr(settings, "supabase_jwt_secret", "")),
         "gmail_client_id_set": bool(getattr(settings, "gmail_client_id", "")),
-        "gmail_client_secret_set": bool(
-            getattr(settings, "gmail_client_secret", "")
-        ),
-        "gmail_redirect_uri_set": bool(
-            getattr(settings, "gmail_redirect_uri", "")
-        ),
-        "oauth_state_secret_set": bool(
-            getattr(settings, "oauth_state_secret", "")
-        ),
+        "gmail_client_secret_set": bool(getattr(settings, "gmail_client_secret", "")),
+        "gmail_redirect_uri_set": bool(getattr(settings, "gmail_redirect_uri", "")),
+        "oauth_state_secret_set": bool(getattr(settings, "oauth_state_secret", "")),
         "openrouter_set": bool(getattr(settings, "openrouter_api_key", "")),
         "anthropic_set": bool(getattr(settings, "anthropic_api_key", "")),
         "frontend_url_set": bool(getattr(settings, "frontend_url", "")),
@@ -66,7 +57,7 @@ def build_request_log(
     user_id: str | None,
 ) -> None:
     payload: dict[str, object] = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "method": method,
         "path": path,
         "status": status,

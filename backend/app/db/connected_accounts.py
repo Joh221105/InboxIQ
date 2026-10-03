@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -32,17 +32,21 @@ async def upsert_account(
 ) -> ConnectedAccount:
     def _upsert() -> dict[str, Any]:
         client = get_service_client()
-        result = client.table("connected_accounts").upsert(
-            {
-                "user_id": str(user_id),
-                "email_address": email_address,
-                "provider": provider,
-                "oauth_token": oauth_token.model_dump(mode="json"),
-                "disconnected_at": None,
-                "disconnected_reason": None,
-            },
-            on_conflict="user_id,email_address",
-        ).execute()
+        result = (
+            client.table("connected_accounts")
+            .upsert(
+                {
+                    "user_id": str(user_id),
+                    "email_address": email_address,
+                    "provider": provider,
+                    "oauth_token": oauth_token.model_dump(mode="json"),
+                    "disconnected_at": None,
+                    "disconnected_reason": None,
+                },
+                on_conflict="user_id,email_address",
+            )
+            .execute()
+        )
         if not result.data:
             raise RuntimeError("upsert returned no data")
         row = result.data[0]
@@ -75,7 +79,7 @@ async def get_account(account_id: UUID) -> ConnectedAccount:
             .maybe_single()
             .execute()
         )
-        return result.data  # type: ignore[return-value]
+        return result.data
 
     row = await asyncio.to_thread(_fetch)
     if not row:
@@ -121,7 +125,7 @@ async def mark_disconnected(account_id: UUID, reason: str) -> None:
     def _update() -> None:
         get_service_client().table("connected_accounts").update(
             {
-                "disconnected_at": datetime.now(timezone.utc).isoformat(),
+                "disconnected_at": datetime.now(UTC).isoformat(),
                 "disconnected_reason": reason,
             }
         ).eq("id", str(account_id)).execute()
@@ -148,7 +152,7 @@ async def update_last_synced(account_id: UUID, synced_at: datetime) -> None:
 
 
 async def list_accounts_due_for_sync() -> list[ConnectedAccount]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=14)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(minutes=14)).isoformat()
 
     def _fetch() -> list[dict[str, Any]]:
         result = (

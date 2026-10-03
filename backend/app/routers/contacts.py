@@ -17,10 +17,10 @@ from app.db.contact_tags import (
 )
 from app.models.contact_tag import (
     ContactJobStatus,
+    ContactsGrouped,
     ContactTag,
     ContactTagCreate,
     ContactTagUpdate,
-    ContactsGrouped,
     CreateContactResponse,
 )
 from app.services.contact_tags import (
@@ -70,8 +70,8 @@ async def post_contact(
             custom_label=body.custom_label,
             color=color,
         )
-    except UniqueViolation:
-        raise HTTPException(status_code=409, detail={"reason": "duplicate"})
+    except UniqueViolation as exc:
+        raise HTTPException(status_code=409, detail={"reason": "duplicate"}) from exc
 
     count = await count_emails_for_identifier(claims.user_id, identifier)
 

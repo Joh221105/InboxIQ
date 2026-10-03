@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -19,9 +19,9 @@ def _email(user_id) -> Email:
         gmail_id=uuid4().hex,
         subject="Subject",
         sender="sender@example.com",
-        received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 13, tzinfo=UTC),
         body_text="Body",
-        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
 
 
@@ -100,9 +100,9 @@ def test_evict_stale_entries_removes_old_jobs() -> None:
     user_id = uuid4()
     old_job = RetriageJob(job_id=job_id, user_id=user_id, total=5)
     old_job.status = "done"
-    old_job.created_at = datetime.now(timezone.utc) - timedelta(seconds=7201)
+    old_job.created_at = datetime.now(UTC) - timedelta(seconds=7201)
     JOBS[job_id] = old_job
-    _last_request_at[user_id] = datetime.now(timezone.utc) - timedelta(seconds=7201)
+    _last_request_at[user_id] = datetime.now(UTC) - timedelta(seconds=7201)
 
     _evict_stale_entries(ttl_seconds=3600)
 
@@ -118,7 +118,7 @@ def test_evict_stale_entries_keeps_recent_jobs() -> None:
     job_id = "new_job"
     user_id = uuid4()
     JOBS[job_id] = RetriageJob(job_id=job_id, user_id=user_id, total=3)
-    _last_request_at[user_id] = datetime.now(timezone.utc)
+    _last_request_at[user_id] = datetime.now(UTC)
 
     _evict_stale_entries(ttl_seconds=3600)
 

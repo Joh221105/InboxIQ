@@ -1,4 +1,3 @@
-# backend/app/routers/emails.py
 from __future__ import annotations
 
 import logging
@@ -8,8 +7,6 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-logger = logging.getLogger(__name__)
 
 from app.core.auth import UserClaims, get_current_user
 from app.db.emails import get_email, get_email_counts, list_emails, update_email
@@ -24,6 +21,8 @@ from app.models.email import (
 )
 from app.services.email_body import fetch_email_body_html, sanitize_body_html
 from app.services.gmail_sync import archive_gmail_message
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/emails", tags=["emails"])
 

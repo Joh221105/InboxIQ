@@ -1,11 +1,10 @@
-# backend/app/services/gmail_sync.py
 from __future__ import annotations
 
 import asyncio
 import base64
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID
 
@@ -85,7 +84,7 @@ def parse_payload(payload: dict) -> str:
 
 async def get_authed_service(account: ConnectedAccount) -> Any:
     tokens = account.oauth_token
-    if tokens.expires_at < datetime.now(timezone.utc) + timedelta(seconds=60):
+    if tokens.expires_at < datetime.now(UTC) + timedelta(seconds=60):
         tokens = await refresh_tokens(account.id, tokens.refresh_token)
 
     creds = Credentials(
@@ -157,10 +156,7 @@ async def fetch_message(service, message_id: str) -> ParsedEmail | None:
     def _get() -> dict | None:
         try:
             return (
-                service.users()
-                .messages()
-                .get(userId="me", id=message_id, format="full")
-                .execute()
+                service.users().messages().get(userId="me", id=message_id, format="full").execute()
             )
         except HttpError as exc:
             if exc.resp.status == 404:
@@ -196,11 +192,9 @@ async def fetch_message(service, message_id: str) -> ParsedEmail | None:
 
     internal_date_ms = msg.get("internalDate")
     if internal_date_ms:
-        received_at = datetime.fromtimestamp(
-            int(internal_date_ms) / 1000, tz=timezone.utc
-        )
+        received_at = datetime.fromtimestamp(int(internal_date_ms) / 1000, tz=UTC)
     else:
-        received_at = datetime.now(timezone.utc)
+        received_at = datetime.now(UTC)
 
     body_preview = parse_payload(payload)
 
@@ -221,7 +215,7 @@ async def sync_account(account_id: UUID) -> SyncResult:
         return SyncResult(fetched=0, inserted=0, updated=0, errors=0)
 
     # Capture time before sync so any emails arriving during the job are fetched next run
-    sync_started_at = datetime.now(timezone.utc)
+    sync_started_at = datetime.now(UTC)
 
     try:
         service = await get_authed_service(account)
@@ -229,12 +223,12 @@ async def sync_account(account_id: UUID) -> SyncResult:
         if exc.is_invalid_grant:
             await mark_disconnected(account_id, "invalid_grant")
         else:
-            logger.warning("Token refresh failed for account %s (non-grant error): %s", account_id, exc)
+            logger.warning(
+                "Token refresh failed for account %s (non-grant error): %s", account_id, exc
+            )
         return SyncResult(fetched=0, inserted=0, updated=0, errors=1)
 
-    after = (
-        int(account.last_synced.timestamp()) if account.last_synced else None
-    )
+    after = int(account.last_synced.timestamp()) if account.last_synced else None
 
     message_ids = await list_message_ids(service, after)
     semaphore = asyncio.Semaphore(PER_ACCOUNT_CONCURRENCY)
@@ -253,9 +247,7 @@ async def sync_account(account_id: UUID) -> SyncResult:
             )
             return (outcome, mid)
 
-    results = await asyncio.gather(
-        *[process(m) for m in message_ids], return_exceptions=True
-    )
+    results = await asyncio.gather(*[process(m) for m in message_ids], return_exceptions=True)
 
     inserted = updated = errors = 0
     for r in results:

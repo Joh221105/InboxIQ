@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -28,8 +28,8 @@ def _make_email(user_id=_USER_ID) -> Email:
         gmail_id="gmail-1",
         subject="Hello",
         sender="sender@example.com",
-        received_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        received_at=datetime(2025, 6, 1, tzinfo=UTC),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
 
 
@@ -46,7 +46,9 @@ def test_get_email_body_strips_script_tags(authed_client: TestClient) -> None:
     html = "<article><h1>Hello</h1><script>alert('x')</script><p>Body</p></article>"
     with (
         patch("app.routers.emails.get_email", new_callable=AsyncMock, return_value=email),
-        patch("app.routers.emails.fetch_email_body_html", new_callable=AsyncMock, return_value=html),
+        patch(
+            "app.routers.emails.fetch_email_body_html", new_callable=AsyncMock, return_value=html
+        ),
     ):
         resp = authed_client.get(f"/emails/{email.id}/body")
 
@@ -78,12 +80,16 @@ def test_sanitize_removes_style_tags() -> None:
 
 
 def test_sanitize_removes_link_tags() -> None:
-    result = sanitize_body_html('<link rel="stylesheet" href="https://evil.example.com/x.css"><p>hi</p>')
+    result = sanitize_body_html(
+        '<link rel="stylesheet" href="https://evil.example.com/x.css"><p>hi</p>'
+    )
     assert "<link" not in result
 
 
 def test_sanitize_removes_meta_refresh() -> None:
-    result = sanitize_body_html('<meta http-equiv="refresh" content="0; url=https://evil.example.com"><p>hi</p>')
+    result = sanitize_body_html(
+        '<meta http-equiv="refresh" content="0; url=https://evil.example.com"><p>hi</p>'
+    )
     assert "<meta" not in result
 
 

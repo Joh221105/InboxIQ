@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -23,7 +23,7 @@ async def test_update_default_context_returns_updated_user() -> None:
                 "default_context": "Job Hunting",
                 "notification_tag_preferences": {},
                 "data_retention_days": None,
-                "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
             }
         ]
 
@@ -69,7 +69,7 @@ async def test_update_user_settings_updates_only_provided_fields() -> None:
                 "default_context": "Daily",
                 "notification_tag_preferences": {"recruiter": True},
                 "data_retention_days": None,
-                "created_at": datetime(2026, 5, 25, tzinfo=timezone.utc).isoformat(),
+                "created_at": datetime(2026, 5, 25, tzinfo=UTC).isoformat(),
             }
         ]
 

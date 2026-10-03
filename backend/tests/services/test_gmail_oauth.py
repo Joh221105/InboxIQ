@@ -1,9 +1,8 @@
-# backend/tests/services/test_gmail_oauth.py
 from __future__ import annotations
 
 import asyncio
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -28,8 +27,8 @@ from app.services.gmail_oauth import (
     verify_state,
 )
 
-
 # --- State JWT ---
+
 
 def test_sign_verify_state_roundtrip() -> None:
     user_id = uuid4()
@@ -44,7 +43,7 @@ def test_verify_state_expired() -> None:
         "user_id": str(uuid4()),
         "return_to": "/settings",
         "nonce": "abc",
-        "exp": (datetime.now(timezone.utc) - timedelta(minutes=1)).timestamp(),
+        "exp": (datetime.now(UTC) - timedelta(minutes=1)).timestamp(),
     }
     token = jwt.encode(payload, "test-oauth-state-secret-at-least-32-chars!", algorithm="HS256")
     with pytest.raises(StateExpired):
@@ -56,7 +55,7 @@ def test_verify_state_bad_signature() -> None:
         "user_id": str(uuid4()),
         "return_to": "/settings",
         "nonce": "abc",
-        "exp": (datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp(),
+        "exp": (datetime.now(UTC) + timedelta(minutes=10)).timestamp(),
     }
     token = jwt.encode(payload, "wrong-secret-here-at-least-32-chars!!", algorithm="HS256")
     with pytest.raises(StateInvalid):
@@ -86,24 +85,28 @@ def test_build_authorize_url_contains_required_params() -> None:
 
 # --- exchange_code ---
 
+
 @pytest.mark.asyncio
 async def test_exchange_code_success() -> None:
     with respx.mock:
         respx.post(GOOGLE_TOKEN_URL).mock(
-            return_value=httpx.Response(200, json={
-                "access_token": "test_access",
-                "refresh_token": "test_refresh",
-                "expires_in": 3600,
-                "scope": "https://www.googleapis.com/auth/gmail.modify",
-                "token_type": "Bearer",
-            })
+            return_value=httpx.Response(
+                200,
+                json={
+                    "access_token": "test_access",
+                    "refresh_token": "test_refresh",
+                    "expires_in": 3600,
+                    "scope": "https://www.googleapis.com/auth/gmail.modify",
+                    "token_type": "Bearer",
+                },
+            )
         )
         tokens = await exchange_code("auth_code_123")
 
     assert tokens.access_token == "test_access"
     assert tokens.refresh_token == "test_refresh"
     assert tokens.scope == "https://www.googleapis.com/auth/gmail.modify"
-    assert tokens.expires_at > datetime.now(timezone.utc)
+    assert tokens.expires_at > datetime.now(UTC)
 
 
 @pytest.mark.asyncio
@@ -123,10 +126,13 @@ async def test_exchange_code_google_400_raises() -> None:
 async def test_get_gmail_address_success() -> None:
     with respx.mock:
         respx.get(GMAIL_PROFILE_URL).mock(
-            return_value=httpx.Response(200, json={
-                "emailAddress": "user@gmail.com",
-                "messagesTotal": 12345,
-            })
+            return_value=httpx.Response(
+                200,
+                json={
+                    "emailAddress": "user@gmail.com",
+                    "messagesTotal": 12345,
+                },
+            )
         )
         address = await get_gmail_address("test_access_token")
     assert address == "user@gmail.com"
@@ -134,22 +140,24 @@ async def test_get_gmail_address_success() -> None:
 
 # --- refresh_tokens race ---
 
+
 @pytest.mark.asyncio
 async def test_refresh_tokens_race_only_one_google_call() -> None:
     from uuid import UUID
+
     account_id = uuid4()
     _refresh_locks.pop(account_id, None)  # clean slate
 
     expired = OAuthTokens(
         access_token="old_access",
         refresh_token="old_refresh",
-        expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
         scope="https://www.googleapis.com/auth/gmail.modify",
     )
     fresh = OAuthTokens(
         access_token="new_access",
         refresh_token="old_refresh",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
         scope="https://www.googleapis.com/auth/gmail.modify",
     )
 
@@ -169,23 +177,27 @@ async def test_refresh_tokens_race_only_one_google_call() -> None:
     with (
         patch("app.services.gmail_oauth.get_account", side_effect=fake_get_account),
         patch("app.services.gmail_oauth.update_oauth_token", new_callable=AsyncMock),
+        respx.mock,
     ):
-        with respx.mock:
-            def count_google(request: httpx.Request) -> httpx.Response:
-                nonlocal google_calls
-                google_calls += 1
-                return httpx.Response(200, json={
+
+        def count_google(request: httpx.Request) -> httpx.Response:
+            nonlocal google_calls
+            google_calls += 1
+            return httpx.Response(
+                200,
+                json={
                     "access_token": "new_access",
                     "expires_in": 3600,
                     "scope": "https://www.googleapis.com/auth/gmail.modify",
                     "token_type": "Bearer",
-                })
-
-            respx.post(GOOGLE_TOKEN_URL).mock(side_effect=count_google)
-
-            await asyncio.gather(
-                refresh_tokens(account_id, "old_refresh"),
-                refresh_tokens(account_id, "old_refresh"),
+                },
             )
+
+        respx.post(GOOGLE_TOKEN_URL).mock(side_effect=count_google)
+
+        await asyncio.gather(
+            refresh_tokens(account_id, "old_refresh"),
+            refresh_tokens(account_id, "old_refresh"),
+        )
 
     assert google_calls == 1, f"Expected 1 Google call, got {google_calls}"

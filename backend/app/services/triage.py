@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any, Awaitable
+from typing import Any
 
 from app.models.ai import ActionItemsResponse, DeadlineResponse, PickupCodeResponse, TriageResponse
 from app.models.email import Email
@@ -65,11 +66,7 @@ async def triage_email(email: Email, user_context: str) -> TriageResult:
             triage_context=user_context,
         )
 
-    user_msg = (
-        f"From: {_email_sender(email)}\n"
-        f"Subject: {email.subject or ''}\n"
-        f"Body: {body[:4000]}"
-    )
+    user_msg = f"From: {_email_sender(email)}\nSubject: {email.subject or ''}\nBody: {body[:4000]}"
     triage, triage_cost = await call_json_with_cost(
         system=TRIAGE_PROMPTS[user_context],
         user=user_msg,
@@ -133,7 +130,7 @@ async def triage_email(email: Email, user_context: str) -> TriageResult:
 
     if tasks:
         outcomes = await asyncio.gather(*(task for _, task in tasks))
-        for (kind, _), outcome in zip(tasks, outcomes):
+        for (kind, _), outcome in zip(tasks, outcomes, strict=True):
             parsed, step_cost = outcome
             result.cost_usd += step_cost
             if kind == "deadline":

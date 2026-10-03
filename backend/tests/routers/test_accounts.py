@@ -1,7 +1,6 @@
-# backend/tests/routers/test_accounts.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
@@ -45,11 +44,11 @@ def _make_account(user_id: UUID, account_id: UUID | None = None) -> ConnectedAcc
         last_synced=None,
         disconnected_at=None,
         disconnected_reason=None,
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
         oauth_token=OAuthTokens(
             access_token="acc_tok",
             refresh_token="ref_tok",
-            expires_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            expires_at=datetime(2026, 1, 1, tzinfo=UTC),
             scope="https://www.googleapis.com/auth/gmail.modify",
         ),
     )
@@ -57,9 +56,12 @@ def _make_account(user_id: UUID, account_id: UUID | None = None) -> ConnectedAcc
 
 # --- GET /accounts ---
 
+
 def test_list_accounts_returns_own_only(authed_client: TestClient) -> None:
     acct = _make_account(_USER_ID)
-    with patch("app.routers.accounts.list_user_accounts", new_callable=AsyncMock, return_value=[acct]):
+    with patch(
+        "app.routers.accounts.list_user_accounts", new_callable=AsyncMock, return_value=[acct]
+    ):
         resp = authed_client.get("/accounts")
     assert resp.status_code == 200
     data = resp.json()
@@ -69,7 +71,9 @@ def test_list_accounts_returns_own_only(authed_client: TestClient) -> None:
 
 def test_list_accounts_no_oauth_token_in_response(authed_client: TestClient) -> None:
     acct = _make_account(_USER_ID)
-    with patch("app.routers.accounts.list_user_accounts", new_callable=AsyncMock, return_value=[acct]):
+    with patch(
+        "app.routers.accounts.list_user_accounts", new_callable=AsyncMock, return_value=[acct]
+    ):
         resp = authed_client.get("/accounts")
     assert resp.status_code == 200
     for item in resp.json():
@@ -84,6 +88,7 @@ def test_list_accounts_requires_auth(anon_client: TestClient) -> None:
 
 
 # --- DELETE /accounts/{id} ---
+
 
 def test_delete_account_as_owner(authed_client: TestClient) -> None:
     account_id = uuid4()

@@ -8,12 +8,12 @@ import pytest
 from starlette.datastructures import Headers
 
 from app.core.auth import UserClaims
+from app.core.config import settings
 from app.core.logging_middleware import (
     build_request_log,
     config_presence_summary,
     resolve_log_user_id,
 )
-from app.core.config import settings
 
 
 def test_config_presence_summary_uses_booleans_only() -> None:

@@ -5,7 +5,7 @@ import logging
 import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -26,7 +26,7 @@ class RetriageJob:
     total: int
     processed: int = 0
     status: Literal["running", "done", "failed"] = "running"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 JOBS: dict[str, RetriageJob] = {}
@@ -41,7 +41,7 @@ class RateLimited(Exception):
 
 
 def _evict_stale_entries(ttl_seconds: int = _JOB_TTL_SECONDS) -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)
+    cutoff = datetime.now(UTC) - timedelta(seconds=ttl_seconds)
     stale_jobs = [
         job_id
         for job_id, job in list(JOBS.items())
@@ -51,8 +51,7 @@ def _evict_stale_entries(ttl_seconds: int = _JOB_TTL_SECONDS) -> None:
         JOBS.pop(job_id, None)
 
     stale_users = [
-        user_id for user_id, timestamp in list(_last_request_at.items())
-        if timestamp < cutoff
+        user_id for user_id, timestamp in list(_last_request_at.items()) if timestamp < cutoff
     ]
     for user_id in stale_users:
         _last_request_at.pop(user_id, None)
@@ -60,7 +59,7 @@ def _evict_stale_entries(ttl_seconds: int = _JOB_TTL_SECONDS) -> None:
 
 async def start_retriage(user_id: UUID, context: str) -> RetriageJob:
     _evict_stale_entries()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last = _last_request_at.get(user_id)
     if last:
         elapsed = (now - last).total_seconds()

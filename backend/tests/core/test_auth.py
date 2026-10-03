@@ -82,9 +82,7 @@ async def test_es256_with_mocked_jwks() -> None:
         "iat": now - 10,
         "exp": now + 3600,
     }
-    token = jwt.encode(
-        payload, private_key, algorithm="ES256", headers={"kid": kid}
-    )
+    token = jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": kid})
 
     pub_jwk = json.loads(ECAlgorithm.to_jwk(private_key.public_key()))
     pub_jwk.update({"kid": kid, "alg": "ES256", "use": "sig"})
@@ -95,9 +93,7 @@ async def test_es256_with_mocked_jwks() -> None:
 
     jwks_url = f"{_SUPABASE_URL}/auth/v1/.well-known/jwks.json"
     with respx.mock:
-        respx.get(jwks_url).mock(
-            return_value=httpx.Response(200, json=jwks_payload)
-        )
+        respx.get(jwks_url).mock(return_value=httpx.Response(200, json=jwks_payload))
         claims = await verify_jwt(token)
 
     assert str(claims.user_id) == _USER_ID

@@ -4,7 +4,7 @@ import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -72,7 +72,7 @@ class ContactTagJob:
     total: int
     processed: int = 0
     status: Literal["running", "done", "failed"] = "running"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 JOBS: dict[str, ContactTagJob] = {}
@@ -80,7 +80,7 @@ _JOB_TTL_SECONDS = 3600
 
 
 def _evict_stale_contact_jobs() -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=_JOB_TTL_SECONDS)
+    cutoff = datetime.now(UTC) - timedelta(seconds=_JOB_TTL_SECONDS)
     stale = [
         job_id
         for job_id, job in list(JOBS.items())

@@ -13,9 +13,7 @@ from app.services.retriage import RateLimited, start_retriage
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-ContextValue = Literal[
-    "Job Hunting", "Shopping", "School Application", "Daily"
-]
+ContextValue = Literal["Job Hunting", "Shopping", "School Application", "Daily"]
 
 
 class UpdateContextBody(BaseModel):

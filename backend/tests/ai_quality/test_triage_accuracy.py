@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -38,8 +38,8 @@ async def test_triage_category_accuracy() -> None:
             subject=raw["subject"],
             sender=raw["from"],
             body_text=raw["body"],
-            received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
-            created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+            received_at=datetime(2026, 5, 13, tzinfo=UTC),
+            created_at=datetime(2026, 5, 13, tzinfo=UTC),
         )
         actual = await triage_email(email, fixture["context"])
         results.append((fixture["expected_category"], actual.category))

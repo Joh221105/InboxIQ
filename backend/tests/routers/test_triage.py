@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
@@ -29,7 +29,12 @@ def authed_client() -> TestClient:
 
 
 def test_patch_users_me_context_starts_retriage(authed_client: TestClient) -> None:
-    user = User(id=_USER_ID, email="user@example.com", default_context="Shopping", created_at=datetime.now(timezone.utc))
+    user = User(
+        id=_USER_ID,
+        email="user@example.com",
+        default_context="Shopping",
+        created_at=datetime.now(UTC),
+    )
     job = RetriageJob(job_id="job1", user_id=_USER_ID, total=7)
 
     with (

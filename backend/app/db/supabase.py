@@ -3,13 +3,13 @@
 - get_service_client(): bypasses RLS. Use for backend operations on behalf of a
   verified user. NEVER expose to the frontend.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
-from supabase import Client, create_client
-
 from app.core.config import settings
+from supabase import Client, create_client
 
 
 def get_anon_client() -> Client:

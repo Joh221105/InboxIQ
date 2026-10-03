@@ -20,7 +20,7 @@ async def get_user(user_id: UUID) -> User:
             .maybe_single()
             .execute()
         )
-        return result.data if result is not None else None  # type: ignore[return-value]
+        return result.data if result is not None else None
 
     data = await asyncio.to_thread(_fetch)
     if not data:
@@ -63,7 +63,7 @@ async def update_user_settings(user_id: UUID, settings: UserSettingsUpdate) -> U
             .table("users")
             .update(changes)
             .eq("id", str(user_id))
-            .select("*")          # required: without this, supabase-py returns data=[]
+            .select("*")  # required: without this, supabase-py returns data=[]
             .execute()
         )
         rows = result.data or []

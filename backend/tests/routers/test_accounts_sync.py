@@ -1,7 +1,6 @@
-# backend/tests/routers/test_accounts_sync.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -29,12 +28,12 @@ def _make_account(disconnected_at=None) -> ConnectedAccount:
         oauth_token=OAuthTokens(
             access_token="acc",
             refresh_token="ref",
-            expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
             scope="https://www.googleapis.com/auth/gmail.modify",
         ),
         color="#4F46E5",
         disconnected_at=disconnected_at,
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
 
 
@@ -59,7 +58,9 @@ def test_sync_account_returns_sync_result(authed_client: TestClient) -> None:
 
     with (
         patch("app.routers.accounts.get_account", new_callable=AsyncMock, return_value=account),
-        patch("app.routers.accounts.sync_account", new_callable=AsyncMock, return_value=sync_result),
+        patch(
+            "app.routers.accounts.sync_account", new_callable=AsyncMock, return_value=sync_result
+        ),
     ):
         resp = authed_client.post(f"/accounts/{account.id}/sync")
 
@@ -80,7 +81,7 @@ def test_sync_wrong_user_returns_404(authed_client: TestClient) -> None:
 
 
 def test_sync_disconnected_account_returns_409(authed_client: TestClient) -> None:
-    account = _make_account(disconnected_at=datetime(2025, 1, 1, tzinfo=timezone.utc))
+    account = _make_account(disconnected_at=datetime(2025, 1, 1, tzinfo=UTC))
 
     with patch("app.routers.accounts.get_account", new_callable=AsyncMock, return_value=account):
         resp = authed_client.post(f"/accounts/{account.id}/sync")

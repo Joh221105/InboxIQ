@@ -1,8 +1,7 @@
-# backend/tests/routers/test_auth_oauth.py
 from __future__ import annotations
 
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -40,6 +39,7 @@ def anon_client() -> TestClient:
 
 # --- GET /auth/gmail/start ---
 
+
 def test_start_returns_google_url(authed_client: TestClient) -> None:
     resp = authed_client.get("/auth/gmail/start?return_to=/settings")
     assert resp.status_code == 200
@@ -62,11 +62,12 @@ def test_start_requires_auth(anon_client: TestClient) -> None:
 
 # --- GET /auth/gmail/callback ---
 
+
 def _mock_tokens() -> MagicMock:
     t = MagicMock()
     t.access_token = "acc"
     t.refresh_token = "ref"
-    t.expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    t.expires_at = datetime.now(UTC) + timedelta(hours=1)
     t.scope = "https://www.googleapis.com/auth/gmail.modify"
     return t
 
@@ -75,9 +76,19 @@ def test_callback_success_redirects(anon_client: TestClient) -> None:
     state = sign_state({"user_id": str(_USER_ID), "return_to": "/settings"})
     connected_account = SimpleNamespace(id=uuid4())
     with (
-        patch("app.routers.auth.exchange_code", new_callable=AsyncMock, return_value=_mock_tokens()),
-        patch("app.routers.auth.get_gmail_address", new_callable=AsyncMock, return_value="me@gmail.com"),
-        patch("app.routers.auth.upsert_account", new_callable=AsyncMock, return_value=connected_account),
+        patch(
+            "app.routers.auth.exchange_code", new_callable=AsyncMock, return_value=_mock_tokens()
+        ),
+        patch(
+            "app.routers.auth.get_gmail_address",
+            new_callable=AsyncMock,
+            return_value="me@gmail.com",
+        ),
+        patch(
+            "app.routers.auth.upsert_account",
+            new_callable=AsyncMock,
+            return_value=connected_account,
+        ),
         patch("app.routers.auth._schedule_initial_sync") as mock_schedule,
     ):
         resp = anon_client.get(
@@ -97,7 +108,7 @@ def test_callback_expired_state(anon_client: TestClient) -> None:
             "user_id": str(uuid4()),
             "return_to": "/settings",
             "nonce": "x",
-            "exp": (datetime.now(timezone.utc) - timedelta(minutes=1)).timestamp(),
+            "exp": (datetime.now(UTC) - timedelta(minutes=1)).timestamp(),
         },
         "test-oauth-state-secret-at-least-32-chars!",
         algorithm="HS256",
@@ -116,7 +127,7 @@ def test_callback_bad_signature_state(anon_client: TestClient) -> None:
             "user_id": str(uuid4()),
             "return_to": "/settings",
             "nonce": "x",
-            "exp": (datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp(),
+            "exp": (datetime.now(UTC) + timedelta(minutes=10)).timestamp(),
         },
         "totally-wrong-secret-at-least-32-chars!!",
         algorithm="HS256",
@@ -140,6 +151,7 @@ def test_callback_user_cancelled(anon_client: TestClient) -> None:
 
 def test_callback_exchange_failed(anon_client: TestClient) -> None:
     from app.services.gmail_oauth import OAuthExchangeFailed
+
     state = sign_state({"user_id": str(_USER_ID), "return_to": "/settings"})
     with patch(
         "app.routers.auth.exchange_code",

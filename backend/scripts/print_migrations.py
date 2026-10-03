@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Print all migration SQL in order — pipe into psql or paste into Supabase SQL editor."""
+
 from __future__ import annotations
 
 import sys

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 from fastapi import FastAPI
@@ -55,10 +57,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         ai_worker_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await ai_worker_task
-        except asyncio.CancelledError:
-            pass
         scheduler.shutdown(wait=False)
 
 
@@ -87,9 +87,7 @@ app.include_router(contacts.router)
 async def _probe_supabase() -> str:
     try:
         async with httpx.AsyncClient(timeout=1.0) as client:
-            resp = await client.get(
-                f"{settings.supabase_url.rstrip('/')}/auth/v1/health"
-            )
+            resp = await client.get(f"{settings.supabase_url.rstrip('/')}/auth/v1/health")
             return "ok" if resp.status_code == 200 else "down"
     except httpx.HTTPError:
         return "down"
@@ -101,9 +99,7 @@ async def _probe_ai() -> str:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    supabase_status, ai_status = await asyncio.gather(
-        _probe_supabase(), _probe_ai()
-    )
+    supabase_status, ai_status = await asyncio.gather(_probe_supabase(), _probe_ai())
     return {
         "status": "ok",
         "version": settings.git_sha,

@@ -1,4 +1,3 @@
-# backend/app/routers/auth.py
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +11,6 @@ from app.core.auth import UserClaims, get_current_user
 from app.core.config import settings
 from app.db.connected_accounts import upsert_account
 from app.db.seed import seed_demo_emails
-from app.services.gmail_sync import sync_account
 from app.services.gmail_oauth import (
     OAuthExchangeFailed,
     StateExpired,
@@ -22,6 +20,7 @@ from app.services.gmail_oauth import (
     get_gmail_address,
     verify_state,
 )
+from app.services.gmail_sync import sync_account
 
 router = APIRouter(prefix="/auth/gmail", tags=["gmail-auth"])
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
@@ -28,7 +28,7 @@ def _make_tag(
         identifier=identifier,
         tag=tag,
         color="#F59E0B",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -186,7 +186,7 @@ def test_patch_contact_updates_label_and_color(authed_client: TestClient) -> Non
         tag="professor",
         custom_label="My Prof",
         color="#FF0000",
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
     with patch("app.routers.contacts.update_tag", new=AsyncMock(return_value=tag)):
         resp = authed_client.patch(

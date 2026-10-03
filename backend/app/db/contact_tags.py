@@ -141,12 +141,7 @@ async def count_emails_for_identifier(user_id: UUID, identifier: str) -> int:
     """Count emails matching the identifier (full-email or domain)."""
 
     def _fetch() -> list[dict[str, Any]]:
-        q = (
-            get_service_client()
-            .table("emails")
-            .select("id")
-            .eq("user_id", str(user_id))
-        )
+        q = get_service_client().table("emails").select("id").eq("user_id", str(user_id))
         if identifier.startswith("@"):
             q = q.ilike("sender", f"%{identifier}")
         else:
@@ -188,6 +183,7 @@ async def apply_retroactive_sync(
 
         rows = await asyncio.to_thread(_update_domain)
     else:
+
         def _update_full() -> list[dict[str, Any]]:
             result = (
                 get_service_client()

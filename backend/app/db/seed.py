@@ -5,11 +5,12 @@ is populated with realistic content for demos and first-time users.
 All demo rows use a ``demo_`` prefix on ``gmail_id`` so they can be
 identified and re-seeded idempotently.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from app.db.supabase import get_service_client
@@ -20,7 +21,7 @@ _NOW = None  # resolved lazily per call so dates are always current
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _days_ago(n: float) -> str:
@@ -175,7 +176,9 @@ def _build_emails() -> list[dict]:
             "ai_summary": "Anthropic invites you to schedule a technical interview by Friday.",
             "ai_processed": True,
             "deadline_extracted": _days_from_now(2),
-            "action_items": [f"Book interview slot at calendly.example/anthropic-interview by {_days_from_now(2)}"],
+            "action_items": [
+                f"Book interview slot at calendly.example/anthropic-interview by {_days_from_now(2)}"
+            ],
             "labels": ["INBOX"],
         },
         {
@@ -241,7 +244,9 @@ def _build_emails() -> list[dict]:
             "ai_summary": "Apartment lease renewal decision due in 6 days — sign or decline online.",
             "ai_processed": True,
             "deadline_extracted": _days_from_now(6),
-            "action_items": [f"Sign or decline lease renewal at greenpointapts.example/portal by {_days_from_now(6)}"],
+            "action_items": [
+                f"Sign or decline lease renewal at greenpointapts.example/portal by {_days_from_now(6)}"
+            ],
             "labels": ["INBOX"],
         },
         {
@@ -253,7 +258,9 @@ def _build_emails() -> list[dict]:
             "body_text": (
                 "Hi,\n\n"
                 "This is a final reminder that your Form I-9 employment eligibility "
-                "verification must be completed before you can start on " + _days_from_now(4) + ".\n\n"
+                "verification must be completed before you can start on "
+                + _days_from_now(4)
+                + ".\n\n"
                 f"Deadline: {_days_from_now(1)}\n\n"
                 "Please bring two forms of acceptable ID to the HR office (Building A, Room 101) "
                 "or complete remotely via: https://hris.techcorp.example/i9\n\n"
@@ -528,7 +535,9 @@ def _build_emails() -> list[dict]:
             "subject": "Your Amazon Prime membership renews automatically",
             "sender": "no-reply@amazon.com",
             "sender_name": "Amazon",
-            "snippet": "Your Prime membership will automatically renew on " + _days_from_now(14) + ".",
+            "snippet": "Your Prime membership will automatically renew on "
+            + _days_from_now(14)
+            + ".",
             "body_text": (
                 "Hi,\n\n"
                 f"Your Amazon Prime membership will renew automatically on {_days_from_now(14)} "
@@ -551,7 +560,9 @@ def _build_emails() -> list[dict]:
             "subject": "Admission Decision Available – University of Washington",
             "sender": "admissions@uw.edu",
             "sender_name": "UW Admissions",
-            "snippet": "Your admission decision for the MS CS program is ready. Respond by " + _days_from_now(15) + ".",
+            "snippet": "Your admission decision for the MS CS program is ready. Respond by "
+            + _days_from_now(15)
+            + ".",
             "body_text": (
                 "Dear Applicant,\n\n"
                 "Your admission decision for the UW Master of Science in Computer Science "
@@ -565,7 +576,9 @@ def _build_emails() -> list[dict]:
             "ai_summary": f"UW MS CS admission decision ready — submit enrollment intent by {_days_from_now(15)}.",
             "ai_processed": True,
             "deadline_extracted": _days_from_now(15),
-            "action_items": [f"Log in to apply.uw.edu and submit enrollment intent by {_days_from_now(15)}"],
+            "action_items": [
+                f"Log in to apply.uw.edu and submit enrollment intent by {_days_from_now(15)}"
+            ],
             "labels": ["INBOX"],
         },
         {
@@ -595,7 +608,9 @@ def _build_emails() -> list[dict]:
             "subject": "Assignment 3 due " + _days_from_now(3) + " – CSE 521",
             "sender": "noreply@canvas.uw.edu",
             "sender_name": "Canvas LMS",
-            "snippet": "Assignment 3: Graph Algorithms is due " + _days_from_now(3) + " at 11:59 PM.",
+            "snippet": "Assignment 3: Graph Algorithms is due "
+            + _days_from_now(3)
+            + " at 11:59 PM.",
             "body_text": (
                 "A reminder from Canvas:\n\n"
                 "Course: CSE 521 – Algorithms\n"
@@ -610,7 +625,9 @@ def _build_emails() -> list[dict]:
             "ai_summary": f"CSE 521 Assignment 3 (Graph Algorithms) due {_days_from_now(3)} at 11:59 PM.",
             "ai_processed": True,
             "deadline_extracted": _days_from_now(3),
-            "action_items": [f"Submit CSE 521 Assignment 3 on Gradescope by {_days_from_now(3)} 11:59 PM"],
+            "action_items": [
+                f"Submit CSE 521 Assignment 3 on Gradescope by {_days_from_now(3)} 11:59 PM"
+            ],
             "labels": ["INBOX"],
         },
         {
@@ -639,7 +656,9 @@ def _build_emails() -> list[dict]:
             "subject": "Office Hours Cancelled – Prof. Chen – " + _days_from_now(1),
             "sender": "mchen@cs.uw.edu",
             "sender_name": "Prof. Michelle Chen",
-            "snippet": "Tomorrow's office hours are cancelled. Next session " + _days_from_now(8) + ".",
+            "snippet": "Tomorrow's office hours are cancelled. Next session "
+            + _days_from_now(8)
+            + ".",
             "body_text": (
                 "Hi everyone,\n\n"
                 f"I need to cancel my office hours scheduled for {_days_from_now(1)} due to a "
@@ -682,7 +701,9 @@ def _build_emails() -> list[dict]:
             "subject": "Offer Letter – Software Engineer II at Linear",
             "sender": "offers@linear.app",
             "sender_name": "Linear People Team",
-            "snippet": "We're excited to offer you a position at Linear! Please review and sign by " + _days_from_now(5) + ".",
+            "snippet": "We're excited to offer you a position at Linear! Please review and sign by "
+            + _days_from_now(5)
+            + ".",
             "body_text": (
                 "Hi,\n\n"
                 "We're thrilled to extend an offer for the Software Engineer II role at Linear!\n\n"
@@ -702,7 +723,9 @@ def _build_emails() -> list[dict]:
             "ai_summary": f"Linear offer: SWE II, $185K + equity + $20K signing — sign by {_days_from_now(5)}.",
             "ai_processed": True,
             "deadline_extracted": _days_from_now(5),
-            "action_items": [f"Sign Linear offer letter at docusign.example by {_days_from_now(5)}"],
+            "action_items": [
+                f"Sign Linear offer letter at docusign.example by {_days_from_now(5)}"
+            ],
             "labels": ["INBOX"],
         },
         {
@@ -729,7 +752,9 @@ def _build_emails() -> list[dict]:
             "ai_summary": f"Vercel final round for Senior FE Engineer — schedule 4-hour loop by {_days_from_now(3)}.",
             "ai_processed": True,
             "deadline_extracted": _days_from_now(3),
-            "action_items": [f"Schedule Vercel final round at calendly.example/vercel-final by {_days_from_now(3)}"],
+            "action_items": [
+                f"Schedule Vercel final round at calendly.example/vercel-final by {_days_from_now(3)}"
+            ],
             "labels": ["INBOX"],
         },
     ]

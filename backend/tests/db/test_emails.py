@@ -1,7 +1,6 @@
-# backend/tests/db/test_emails.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -22,7 +21,7 @@ async def test_upsert_email_calls_rpc_and_returns_inserted() -> None:
         sender_name="Alice",
         subject="Hello",
         body_preview="Body",
-        received_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        received_at=datetime(2025, 6, 1, tzinfo=UTC),
     )
 
     mock_client = MagicMock()
@@ -61,7 +60,7 @@ async def test_upsert_email_passes_contact_tag_id_to_rpc() -> None:
         sender_name="Alice",
         subject="Hello",
         body_preview="Body",
-        received_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        received_at=datetime(2025, 6, 1, tzinfo=UTC),
     )
 
     mock_client = MagicMock()
@@ -114,12 +113,12 @@ async def test_update_email_marks_pickup_used_as_archived() -> None:
         subject="Pickup ready",
         sender="locker@example.com",
         body_text="Code 123456",
-        received_at=datetime(2026, 5, 25, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 25, tzinfo=UTC),
         is_pickup_code=True,
         pickup_code="123456",
         pickup_used=False,
         is_archived=False,
-        created_at=datetime(2026, 5, 25, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 25, tzinfo=UTC),
     )
     updates: list[dict] = []
 
@@ -183,9 +182,9 @@ async def test_update_email_includes_is_read_change() -> None:
         gmail_id="gmail-1",
         subject="Message",
         sender="sender@example.com",
-        received_at=datetime(2026, 5, 25, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 25, tzinfo=UTC),
         is_read=False,
-        created_at=datetime(2026, 5, 25, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 25, tzinfo=UTC),
     )
     updates: list[dict] = []
 
@@ -320,7 +319,9 @@ def test_build_contact_tag_none_input_returns_none() -> None:
 def test_build_contact_tag_uses_custom_label_when_set() -> None:
     from app.db.emails import _build_contact_tag
 
-    result = _build_contact_tag({"tag": "recruiter", "custom_label": "Recruiter", "color": "#ff0000"})
+    result = _build_contact_tag(
+        {"tag": "recruiter", "custom_label": "Recruiter", "color": "#ff0000"}
+    )
     assert result is not None
     assert result.label == "Recruiter"
     assert result.color == "#ff0000"

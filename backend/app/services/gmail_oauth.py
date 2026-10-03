@@ -1,23 +1,21 @@
-# backend/app/services/gmail_oauth.py
 from __future__ import annotations
 
 import asyncio
+import logging
 import urllib.parse
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
-
-import logging
 
 import httpx
 import jwt
 from pydantic import BaseModel, ValidationError
 
-logger = logging.getLogger(__name__)
-
 from app.core.config import settings
 from app.db.connected_accounts import get_account, update_oauth_token
 from app.models.connected_account import OAuthTokens
+
+logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -29,6 +27,7 @@ _refresh_locks: dict[UUID, asyncio.Lock] = {}
 
 
 # --- Exceptions ---
+
 
 class StateInvalid(Exception):
     pass
@@ -50,6 +49,7 @@ class RefreshFailed(Exception):
 
 # --- State claim model ---
 
+
 class StateClaims(BaseModel):
     user_id: UUID
     return_to: str
@@ -58,11 +58,12 @@ class StateClaims(BaseModel):
 
 # --- State signing ---
 
+
 def sign_state(claims: dict) -> str:
     payload = {
         **claims,
         "nonce": uuid.uuid4().hex,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "exp": datetime.now(UTC) + timedelta(minutes=10),
     }
     return jwt.encode(payload, settings.oauth_state_secret, algorithm="HS256")
 
@@ -77,9 +78,9 @@ def verify_state(token: str) -> StateClaims:
         )
         return StateClaims(**payload)
     except jwt.ExpiredSignatureError:
-        raise StateExpired()
+        raise StateExpired() from None
     except (jwt.PyJWTError, ValidationError):
-        raise StateInvalid()
+        raise StateInvalid() from None
 
 
 def build_authorize_url(user_id: UUID, return_to: str) -> str:
@@ -126,7 +127,7 @@ async def exchange_code(code: str) -> OAuthTokens:
         return OAuthTokens(
             access_token=data["access_token"],
             refresh_token=data["refresh_token"],
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+            expires_at=datetime.now(UTC) + timedelta(seconds=data["expires_in"]),
             scope=data.get("scope", ""),
         )
     except (KeyError, TypeError) as exc:
@@ -152,7 +153,7 @@ async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
         _refresh_locks[account_id] = asyncio.Lock()
     async with _refresh_locks[account_id]:
         account = await get_account(account_id)
-        if account.oauth_token.expires_at > datetime.now(timezone.utc) + timedelta(seconds=60):
+        if account.oauth_token.expires_at > datetime.now(UTC) + timedelta(seconds=60):
             return account.oauth_token
 
         async with httpx.AsyncClient() as client:
@@ -181,7 +182,7 @@ async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
             new_tokens = OAuthTokens(
                 access_token=data["access_token"],
                 refresh_token=refresh_token,
-                expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+                expires_at=datetime.now(UTC) + timedelta(seconds=data["expires_in"]),
                 scope=data.get("scope", ""),
             )
         except (KeyError, TypeError) as exc:
