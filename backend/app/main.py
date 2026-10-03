@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.errors import register_error_handlers
 from app.core.logging_middleware import (
     config_presence_summary,
     request_logging_middleware,
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="InboxIQ API", version="0.1.0", lifespan=lifespan)
+register_error_handlers(app)
 
 app.middleware("http")(request_logging_middleware)
 
