@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.core.auth import UserClaims, get_current_user
+from app.core.errors import NotFoundError
 from app.main import app
 from app.models.user import EmailDataDeleteCounts, User
 
@@ -141,7 +141,7 @@ def test_delete_email_data_uses_claims_user_id(authed_client: TestClient) -> Non
 def test_get_me_not_found(authed_client: TestClient) -> None:
     with patch(
         "app.routers.users.get_user",
-        new=AsyncMock(side_effect=HTTPException(status_code=404, detail="not found")),
+        new=AsyncMock(side_effect=NotFoundError("User not found.")),
     ):
         resp = authed_client.get("/users/me")
     assert resp.status_code == 404

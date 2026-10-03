@@ -6,10 +6,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.contact_tags import (
-    find_contact_tag,
-    normalize_identifier,
-)
+from app.models.contact_tag import normalize_identifier
+from app.services.contact_tags import find_contact_tag
 
 # ---------------------------------------------------------------------------
 # normalize_identifier

@@ -4,12 +4,16 @@ import asyncio
 import logging
 import re
 from collections.abc import Awaitable
-from dataclasses import dataclass, field
-from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from app.models.ai import ActionItemsResponse, DeadlineResponse, PickupCodeResponse, TriageResponse
+from app.models.ai import (
+    ActionItemsResponse,
+    DeadlineResponse,
+    PickupCodeResponse,
+    TriageResponse,
+    TriageResult,
+)
 from app.models.email import Email
 from app.prompts.extract import ACTION_ITEMS_PROMPT, DEADLINE_PROMPT, PICKUP_CODE_PROMPT
 from app.prompts.triage import TRIAGE_PROMPTS
@@ -40,21 +44,6 @@ def _email_sender(email: Email) -> str:
 def pickup_code_prefilter(email: Email) -> bool:
     text = f"{email.subject or ''} {_email_body(email)[:500]}"
     return any(p.search(text) for p in PICKUP_PATTERNS)
-
-
-@dataclass
-class TriageResult:
-    category: str
-    summary: str
-    triage_context: str
-    deadline_extracted: date | None = None
-    action_items: list[str] | None = None
-    is_pickup_code: bool = False
-    pickup_code: str | None = None
-    pickup_expiry: date | None = None
-    retailer: str | None = None
-    locker_location: str | None = None
-    cost_usd: Decimal = field(default_factory=Decimal)
 
 
 async def triage_email(email: Email, user_context: str) -> TriageResult:

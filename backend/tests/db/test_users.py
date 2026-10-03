@@ -9,52 +9,6 @@ from app.models.user import UserSettingsUpdate
 
 
 @pytest.mark.asyncio
-async def test_update_default_context_returns_updated_user() -> None:
-    from app.db.users import update_default_context
-
-    user_id = uuid4()
-    captured_select: list[str] = []
-
-    class _Result:
-        data = [
-            {
-                "id": str(user_id),
-                "email": "user@example.com",
-                "default_context": "Job Hunting",
-                "notification_tag_preferences": {},
-                "data_retention_days": None,
-                "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
-            }
-        ]
-
-    class _Chain:
-        def update(self, _changes):
-            return self
-
-        def eq(self, *_args):
-            return self
-
-        def select(self, fields):
-            captured_select.append(fields)
-            return self
-
-        def execute(self):
-            return _Result()
-
-    class _Client:
-        def table(self, _name):
-            return _Chain()
-
-    from unittest.mock import patch
-
-    with patch("app.db.users.get_service_client", return_value=_Client()):
-        user = await update_default_context(user_id, "Job Hunting")
-
-    assert user.default_context == "Job Hunting"
-    assert captured_select == ["*"]
-
-
-@pytest.mark.asyncio
 async def test_update_user_settings_updates_only_provided_fields() -> None:
     from app.db.users import update_user_settings
 

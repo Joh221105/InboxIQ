@@ -6,9 +6,12 @@ from html import escape
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import httpx
+from fastapi import APIRouter, Depends, Query
+from googleapiclient.errors import HttpError
 
 from app.core.auth import UserClaims, get_current_user
+from app.core.errors import NotFoundError
 from app.db.emails import get_email, get_email_counts, list_emails, update_email
 from app.models.email import (
     Email,
@@ -20,6 +23,7 @@ from app.models.email import (
     TriageCategory,
 )
 from app.services.email_body import fetch_email_body_html, sanitize_body_html
+from app.services.gmail_oauth import RefreshFailed
 from app.services.gmail_sync import archive_gmail_message
 
 logger = logging.getLogger(__name__)
@@ -34,7 +38,7 @@ async def get_emails(
     contact_tag_id: UUID | None = Query(default=None),
     triage_category: TriageCategory | None = Query(default=None),
     is_archived: bool = Query(default=False),
-    since: str | None = Query(default=None),
+    since: datetime | None = Query(default=None),
     search: str | None = Query(default=None),
     sender_search: str | None = Query(default=None),
     has_deadline: bool = Query(default=False),
@@ -50,7 +54,7 @@ async def get_emails(
         contact_tag_id=contact_tag_id,
         triage_category=triage_category,
         is_archived=is_archived,
-        since=datetime.fromisoformat(since) if since else None,
+        since=since,
         search=search,
         sender_search=sender_search,
         has_deadline=has_deadline,
@@ -77,14 +81,15 @@ async def patch_email(
     if body.pickup_used is True:
         existing = await get_email(email_id, claims.user_id)
         if existing is None:
-            raise HTTPException(status_code=404, detail="Email not found")
+            raise NotFoundError("Email not found.")
         try:
             await archive_gmail_message(existing.account_id, existing.gmail_id)
-        except Exception:
-            logger.warning("archive failed for email_id=%s — marking used anyway", email_id)
+        except (HttpError, RefreshFailed, httpx.HTTPError):
+            # Marking the code used matters more than archiving it in Gmail.
+            logger.warning("gmail archive failed for email_id=%s; marking used anyway", email_id)
     updated = await update_email(email_id, claims.user_id, body)
     if updated is None:
-        raise HTTPException(status_code=404, detail="Email not found")
+        raise NotFoundError("Email not found.")
     return updated
 
 
@@ -94,8 +99,9 @@ async def get_email_body(
     claims: UserClaims = Depends(get_current_user),
 ) -> EmailBodyResponse:
     email = await get_email(email_id, claims.user_id)
+    # get_email already filters by user; the ownership re-check is defense in depth.
     if email is None or email.user_id != claims.user_id:
-        raise HTTPException(status_code=404, detail="Email not found")
+        raise NotFoundError("Email not found.")
 
     if email.gmail_id.startswith("demo_"):
         text = email.body_text or ""
@@ -107,4 +113,5 @@ async def get_email_body(
         return EmailBodyResponse(body_html=body_html)
 
     body_html = await fetch_email_body_html(email.account_id, email.gmail_id)
+    # Re-sanitize at the response boundary in case the cached body predates a sanitizer change.
     return EmailBodyResponse(body_html=sanitize_body_html(body_html))

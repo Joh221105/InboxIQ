@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import logging
-import re
+import random
 from uuid import UUID
 
 from app.core.background import spawn
 from app.db import contact_tags as db
+from app.models.contact_tag import ContactTagCreate, CreateContactResponse
 from app.models.job import Job
 from app.services.jobs import JobRegistry
 
 logger = logging.getLogger(__name__)
-
-VALID_TAG_TYPES = {"professor", "friend", "recruiter", "custom"}
 
 DEFAULT_COLORS: dict[str, str] = {
     "professor": "#3B82F6",
@@ -31,20 +30,6 @@ CUSTOM_PALETTE = [
 ]
 
 SYNC_THRESHOLD = 100
-
-
-def normalize_identifier(s: str) -> str:
-    s = s.strip().lower()
-    if not s:
-        raise ValueError("identifier cannot be empty")
-    if s.startswith("@"):
-        domain = s[1:]
-        if not re.match(r"^[a-z0-9.-]+\.[a-z]{2,}$", domain):
-            raise ValueError(f"invalid domain identifier: {s!r}")
-        return s
-    if not re.match(r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$", s):
-        raise ValueError(f"invalid email identifier: {s!r}")
-    return s
 
 
 async def find_contact_tag(user_id: UUID, sender_email: str) -> UUID | None:
@@ -96,3 +81,24 @@ async def _process_retroactive(
     except Exception:
         logger.exception("retroactive tagging failed for tag %s", tag_id)
         job.status = "failed"
+
+
+async def tag_contact(user_id: UUID, body: ContactTagCreate) -> CreateContactResponse:
+    """Create a tag and apply it to past emails.
+
+    Small backfills run inline; large ones run as a background job.
+    """
+    color = body.color or DEFAULT_COLORS.get(body.tag) or random.choice(CUSTOM_PALETTE)
+    tag = await db.create_tag(
+        user_id=user_id,
+        identifier=body.identifier,
+        tag=body.tag,
+        custom_label=body.custom_label,
+        color=color,
+    )
+    count = await db.count_emails_for_identifier(user_id, body.identifier)
+    if count <= SYNC_THRESHOLD:
+        await db.apply_retroactive_sync(tag.id, user_id, body.identifier)
+        return CreateContactResponse(tag=tag, retroactive_count=count, job_id=None)
+    job_id = await apply_retroactive_async(tag.id, user_id, body.identifier)
+    return CreateContactResponse(tag=tag, retroactive_count=count, job_id=job_id)

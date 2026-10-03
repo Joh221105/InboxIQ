@@ -253,3 +253,8 @@ def test_patch_email_archives_gmail_when_pickup_marked_used(authed_client: TestC
     assert resp.status_code == 200
     mock_get.assert_awaited_once_with(email.id, _USER_ID)
     mock_archive.assert_awaited_once_with(email.account_id, email.gmail_id)
+
+
+def test_list_emails_rejects_malformed_since(authed_client: TestClient) -> None:
+    resp = authed_client.get("/emails?since=yesterday")
+    assert resp.status_code == 422

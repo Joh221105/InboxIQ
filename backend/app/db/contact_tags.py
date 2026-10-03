@@ -4,12 +4,13 @@ import asyncio
 from typing import Any
 from uuid import UUID
 
+from postgrest.exceptions import APIError
+
+from app.core.errors import ConflictError
 from app.db.supabase import get_service_client
 from app.models.contact_tag import ContactTag
 
-
-class UniqueViolation(Exception):
-    pass
+_UNIQUE_VIOLATION = "23505"  # PostgreSQL error code
 
 
 def _row_to_tag(row: dict[str, Any]) -> ContactTag:
@@ -39,7 +40,7 @@ async def create_tag(
     custom_label: str | None,
     color: str,
 ) -> ContactTag:
-    def _insert() -> dict[str, Any]:
+    def _insert() -> list[dict[str, Any]]:
         result = (
             get_service_client()
             .table("contact_tags")
@@ -52,55 +53,33 @@ async def create_tag(
                     "color": color,
                 }
             )
-            .select("*")
-            .single()
             .execute()
         )
-        return result.data
+        return result.data or []
 
     try:
-        row = await asyncio.to_thread(_insert)
-        return _row_to_tag(row)
-    except Exception as exc:
-        msg = str(exc).lower()
-        if "unique" in msg or "duplicate" in msg or "23505" in msg:
-            raise UniqueViolation("duplicate identifier for user") from exc
+        rows = await asyncio.to_thread(_insert)
+    except APIError as exc:
+        if exc.code == _UNIQUE_VIOLATION:
+            raise ConflictError("This sender is already tagged.", code="duplicate_contact") from exc
         raise
-
-
-async def get_tag(tag_id: UUID, user_id: UUID) -> ContactTag | None:
-    def _fetch() -> dict[str, Any] | None:
-        result = (
-            get_service_client()
-            .table("contact_tags")
-            .select("*")
-            .eq("id", str(tag_id))
-            .eq("user_id", str(user_id))
-            .maybe_single()
-            .execute()
-        )
-        return result.data
-
-    row = await asyncio.to_thread(_fetch)
-    return _row_to_tag(row) if row else None
+    return _row_to_tag(rows[0])
 
 
 async def update_tag(tag_id: UUID, user_id: UUID, changes: dict[str, Any]) -> ContactTag | None:
-    def _update() -> dict[str, Any] | None:
+    def _update() -> list[dict[str, Any]]:
         result = (
             get_service_client()
             .table("contact_tags")
             .update(changes)
             .eq("id", str(tag_id))
             .eq("user_id", str(user_id))
-            .select("*")
-            .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data or []
 
-    row = await asyncio.to_thread(_update)
-    return _row_to_tag(row) if row else None
+    rows = await asyncio.to_thread(_update)
+    return _row_to_tag(rows[0]) if rows else None
 
 
 async def delete_tag(tag_id: UUID, user_id: UUID) -> bool:

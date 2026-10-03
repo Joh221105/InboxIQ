@@ -10,7 +10,7 @@ from uuid import UUID
 
 from app.core.clock import utc_now, utc_today
 from app.db.supabase import get_service_client
-from app.models.ai import Digest, StoredDigest
+from app.models.ai import Digest, StoredDigest, TriageResult
 from app.models.email import (
     ContactTagInfo,
     Email,
@@ -21,11 +21,11 @@ from app.models.email import (
     ParsedEmail,
     PickupCodeRow,
 )
-from app.services.triage import TriageResult
 
 _log = logging.getLogger(__name__)
 
 _COUNTS_CACHE_TTL = timedelta(seconds=30)
+_MAX_AI_ATTEMPTS = 3
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
 
 _EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags!contact_tag_id(tag,custom_label,color)"
@@ -228,7 +228,7 @@ async def get_email(email_id: UUID, user_id: UUID) -> Email | None:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result is not None else None  # maybe_single(): None when no row
 
     row = await asyncio.to_thread(_fetch)
     if not row:
@@ -254,22 +254,20 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
     if not changes:
         return existing
 
-    def _update() -> dict[str, Any] | None:
-        result = (
+    def _update() -> None:
+        (
             get_service_client()
             .table("emails")
             .update(changes)
             .eq("id", str(email_id))
             .eq("user_id", str(user_id))
-            .select(_EMAIL_SELECT)
-            .maybe_single()
             .execute()
         )
-        return result.data
 
-    row = await asyncio.to_thread(_update)
+    await asyncio.to_thread(_update)
     _clear_counts_cache(user_id)
-    return _row_to_email(row) if row else None
+    # Re-read so the response includes the joined account and contact-tag fields.
+    return await get_email(email_id, user_id)
 
 
 async def list_pickup_codes(
@@ -366,28 +364,23 @@ async def apply_triage_result(email_id: UUID, result: TriageResult) -> None:
 
 
 async def mark_ai_failed(email_id: UUID) -> int:
-    now = utc_now().isoformat()
+    """Record a failed AI attempt; after the third, show a placeholder summary.
+
+    The email stays unprocessed so the worker retries it until the attempt cap
+    in `list_unprocessed_emails` stops picking it up.
+    """
 
     def _update() -> int:
-        result = (
-            get_service_client()
-            .table("emails")
-            .update({"last_ai_attempt_at": now})
-            .eq("id", str(email_id))
-            .select("ai_attempts")
-            .maybe_single()
-            .execute()
+        client = get_service_client()
+        client.rpc("increment_ai_attempts", {"p_email_id": str(email_id)}).execute()
+        row = (
+            client.table("emails").select("ai_attempts").eq("id", str(email_id)).single().execute()
         )
-        current = (result.data or {}).get("ai_attempts") or 0
-        attempts = int(current) + 1
-        changes: dict[str, Any] = {
-            "ai_attempts": attempts,
-            "last_ai_attempt_at": now,
-            "ai_processed": False,  # always reset so worker can retry
-        }
-        if attempts >= 3:
+        attempts = int((row.data or {}).get("ai_attempts") or 0)
+        changes: dict[str, Any] = {"ai_processed": False}
+        if attempts >= _MAX_AI_ATTEMPTS:
             changes["ai_summary"] = "(AI unavailable)"
-        get_service_client().table("emails").update(changes).eq("id", str(email_id)).execute()
+        client.table("emails").update(changes).eq("id", str(email_id)).execute()
         return attempts
 
     return await asyncio.to_thread(_update)
@@ -402,7 +395,7 @@ async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
             .table("emails")
             .select(_EMAIL_SELECT)
             .eq("ai_processed", False)
-            .lt("ai_attempts", 3)  # don't retry permanently-failed emails
+            .lt("ai_attempts", _MAX_AI_ATTEMPTS)  # don't retry permanently-failed emails
             .or_(f"last_ai_attempt_at.is.null,last_ai_attempt_at.lt.{cutoff.isoformat()}")
             .order("received_at", desc=True)
             .limit(limit)
@@ -505,7 +498,7 @@ async def get_digest(user_id: UUID, digest_date: date) -> StoredDigest | None:
                 .maybe_single()
                 .execute()
             )
-            return result.data
+            return result.data if result is not None else None
         except Exception as exc:
             _log.warning("get_digest query failed (treating as cache miss): %s", exc)
             return None

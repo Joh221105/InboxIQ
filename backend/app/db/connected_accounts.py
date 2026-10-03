@@ -5,22 +5,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from fastapi import HTTPException
-from pydantic import ValidationError
-
+from app.core.errors import NotFoundError
 from app.db.supabase import get_service_client
 from app.models.connected_account import ConnectedAccount, OAuthTokens
 
 
 def _row_to_account(row: dict[str, Any]) -> ConnectedAccount:
-    raw_token = row.get("oauth_token") or {}
-    try:
-        token = OAuthTokens(**raw_token)
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Malformed oauth_token in DB for account {row.get('id')}: {exc}",
-        ) from exc
+    token = OAuthTokens.model_validate(row.get("oauth_token") or {})
     return ConnectedAccount(**{**row, "oauth_token": token})
 
 
@@ -79,11 +70,11 @@ async def get_account(account_id: UUID) -> ConnectedAccount:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result is not None else None  # maybe_single(): None when no row
 
     row = await asyncio.to_thread(_fetch)
     if not row:
-        raise HTTPException(status_code=404, detail="Account not found")
+        raise NotFoundError("Account not found.")
     return _row_to_account(row)
 
 
@@ -117,7 +108,7 @@ async def update_oauth_token(account_id: UUID, new_token: OAuthTokens) -> Connec
 
     row = await asyncio.to_thread(_update)
     if not row:
-        raise HTTPException(status_code=404, detail="Account not found")
+        raise NotFoundError("Account not found.")
     return _row_to_account(row)
 
 

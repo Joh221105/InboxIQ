@@ -87,7 +87,7 @@ def test_sync_disconnected_account_returns_409(authed_client: TestClient) -> Non
         resp = authed_client.post(f"/accounts/{account.id}/sync")
 
     assert resp.status_code == 409
-    assert resp.json()["reason"] == "disconnected"
+    assert resp.json()["detail"]["code"] == "account_disconnected"
 
 
 def test_sync_requires_auth(anon_client: TestClient) -> None:
