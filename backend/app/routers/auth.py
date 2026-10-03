@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 
 from app.core.auth import UserClaims, get_current_user
+from app.core.background import spawn
 from app.core.config import settings
+from app.core.errors import BadRequestError
 from app.db.connected_accounts import upsert_account
-from app.db.seed import seed_demo_emails
+from app.demo.seed import seed_demo_emails
 from app.services.gmail_oauth import (
     OAuthExchangeFailed,
     StateExpired,
@@ -18,6 +18,7 @@ from app.services.gmail_oauth import (
     build_authorize_url,
     exchange_code,
     get_gmail_address,
+    is_safe_return_path,
     verify_state,
 )
 from app.services.gmail_sync import sync_account
@@ -26,39 +27,14 @@ router = APIRouter(prefix="/auth/gmail", tags=["gmail-auth"])
 logger = logging.getLogger(__name__)
 
 
-def _schedule_initial_sync(account_id: UUID) -> None:
-    async def _run_sync() -> None:
-        try:
-            await sync_account(account_id)
-        except Exception as exc:
-            logger.warning("Initial sync failed for account %s: %s", account_id, exc)
-
-    try:
-        asyncio.create_task(_run_sync())
-    except RuntimeError as exc:
-        logger.warning("Unable to schedule initial sync for account %s: %s", account_id, exc)
-
-
-def _schedule_demo_seed(user_id: UUID, account_id: UUID) -> None:
-    async def _run_seed() -> None:
-        try:
-            await seed_demo_emails(user_id, account_id)
-        except Exception as exc:
-            logger.warning("Demo seed failed for account %s: %s", account_id, exc)
-
-    try:
-        asyncio.create_task(_run_seed())
-    except RuntimeError as exc:
-        logger.warning("Unable to schedule demo seed for account %s: %s", account_id, exc)
-
-
 @router.get("/start")
 async def gmail_oauth_start(
     return_to: str = "/settings",
     claims: UserClaims = Depends(get_current_user),
 ) -> dict[str, str]:
-    url = build_authorize_url(claims.user_id, return_to)
-    return {"url": url}
+    if not is_safe_return_path(return_to):
+        raise BadRequestError("return_to must be a path on this site.", code="invalid_return_to")
+    return {"url": build_authorize_url(claims.user_id, return_to)}
 
 
 @router.get("/callback")
@@ -70,39 +46,36 @@ async def gmail_oauth_callback(
     frontend = settings.frontend_url.rstrip("/")
     return_to = "/settings"
 
-    def err(reason: str) -> RedirectResponse:
-        return RedirectResponse(
-            url=f"{frontend}{return_to}?gmail_connected=error&reason={reason}",
-            status_code=302,
-        )
+    def redirect(query: str) -> RedirectResponse:
+        return RedirectResponse(url=f"{frontend}{return_to}?{query}", status_code=302)
+
+    def fail(reason: str) -> RedirectResponse:
+        return redirect(f"gmail_connected=error&reason={reason}")
 
     if error:
-        return err("user_cancelled")
-
+        return fail("user_cancelled")
     if not state:
-        return err("state_invalid")
-
+        return fail("state_invalid")
     try:
         claims = verify_state(state)
-        return_to = claims.return_to
     except StateExpired:
-        return err("state_expired")
+        return fail("state_expired")
     except StateInvalid:
-        return err("state_invalid")
-
+        return fail("state_invalid")
+    # The state is signed, but re-check in case a token predates the /start validation.
+    if is_safe_return_path(claims.return_to):
+        return_to = claims.return_to
     if not code:
-        return err("exchange_failed")
+        return fail("exchange_failed")
 
     try:
         tokens = await exchange_code(code)
+        if not tokens.refresh_token:
+            return fail("no_refresh_token")
+        email_address = await get_gmail_address(tokens.access_token)
     except OAuthExchangeFailed as exc:
-        logger.warning("gmail token exchange failed: %s", exc)
-        return err("exchange_failed")
-
-    if not tokens.refresh_token:
-        return err("no_refresh_token")
-
-    email_address = await get_gmail_address(tokens.access_token)
+        logger.warning("gmail oauth exchange failed: %s", exc)
+        return fail("exchange_failed")
 
     account = await upsert_account(
         user_id=claims.user_id,
@@ -110,10 +83,7 @@ async def gmail_oauth_callback(
         provider="gmail",
         oauth_token=tokens,
     )
-    _schedule_initial_sync(account.id)
-    _schedule_demo_seed(claims.user_id, account.id)
-
-    return RedirectResponse(
-        url=f"{frontend}{return_to}?gmail_connected=success",
-        status_code=302,
-    )
+    spawn(sync_account(account.id), name=f"initial-sync:{account.id}")
+    if settings.demo_mode:
+        spawn(seed_demo_emails(claims.user_id, account.id), name=f"demo-seed:{account.id}")
+    return redirect("gmail_connected=success")

@@ -42,7 +42,7 @@ async def test_triage_email_empty_body_skips_openai() -> None:
 
 @pytest.mark.asyncio
 async def test_triage_email_none_body_skips_openai() -> None:
-    """Image-only emails with body_text=None must return auto_archive without calling OpenAI."""
+    """Image-only emails with body_text=None must return auto_archive without calling the LLM."""
     from app.services.triage import triage_email
 
     call_json = AsyncMock()

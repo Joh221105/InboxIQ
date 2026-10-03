@@ -97,6 +97,15 @@ def build_authorize_url(user_id: UUID, return_to: str) -> str:
     return f"{GOOGLE_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
+def is_safe_return_path(path: str) -> bool:
+    """True only for same-origin absolute paths such as ``/settings``.
+
+    Rejects scheme-relative (``//host``) and backslash (``/\\host``) forms that
+    browsers treat as another origin.
+    """
+    return path.startswith("/") and not path.startswith(("//", "/\\"))
+
+
 async def exchange_code(code: str) -> OAuthTokens:
     async with httpx.AsyncClient() as client:
         resp = await client.post(
@@ -115,11 +124,7 @@ async def exchange_code(code: str) -> OAuthTokens:
         except Exception:
             _error_key = "unparseable"
         logger.error(
-            "google token exchange failed: status=%s error=%s redirect_uri=%s client_id=%s",
-            resp.status_code,
-            _error_key,
-            settings.gmail_redirect_uri,
-            settings.gmail_client_id,
+            "google token exchange failed: status=%s error=%s", resp.status_code, _error_key
         )
         raise OAuthExchangeFailed(_error_key)
     data = resp.json()

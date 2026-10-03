@@ -1,22 +1,11 @@
-"""Demo email seed data and helper to insert it.
-
-Called automatically after a Gmail account is connected so the inbox
-is populated with realistic content for demos and first-time users.
-All demo rows use a ``demo_`` prefix on ``gmail_id`` so they can be
-identified and re-seeded idempotently.
-"""
+"""Sample inbox used when DEMO_MODE is enabled (rows use a ``demo_`` gmail_id prefix)."""
 
 from __future__ import annotations
 
-import asyncio
-import logging
 from datetime import timedelta
-from uuid import UUID
+from typing import Any
 
 from app.core.clock import utc_now, utc_today
-from app.db.supabase import get_service_client
-
-logger = logging.getLogger(__name__)
 
 
 def _days_ago(n: float) -> str:
@@ -27,7 +16,7 @@ def _days_from_now(n: int) -> str:
     return (utc_today() + timedelta(days=n)).isoformat()
 
 
-def _build_emails() -> list[dict]:
+def build_demo_emails() -> list[dict[str, Any]]:
     """Build demo email fixtures. Called at seed time so all dates are fresh."""
     return [
         # ── Package pickup codes ─────────────────────────────────────────────
@@ -753,40 +742,3 @@ def _build_emails() -> list[dict]:
             "labels": ["INBOX"],
         },
     ]
-
-
-async def seed_demo_emails(user_id: UUID, account_id: UUID) -> int:
-    """Upsert demo emails for *user_id* under *account_id*.
-
-    Idempotent — safe to call multiple times; existing rows are updated in
-    place via ``on_conflict=account_id,gmail_id``.  Returns the number of
-    rows written.
-    """
-    emails = _build_emails()
-    rows = [
-        {
-            **email,
-            "user_id": str(user_id),
-            "account_id": str(account_id),
-            "action_items": email.get("action_items", []),
-            "is_archived": email.get("is_archived", False),
-            "is_read": email.get("is_read", False),
-            "is_pickup_code": email.get("is_pickup_code", False),
-            "pickup_used": False,
-            "labels": email.get("labels", ["INBOX"]),
-        }
-        for email in emails
-    ]
-
-    def _upsert() -> int:
-        result = (
-            get_service_client()
-            .table("emails")
-            .upsert(rows, on_conflict="account_id,gmail_id")
-            .execute()
-        )
-        return len(result.data) if result.data else 0
-
-    count = await asyncio.to_thread(_upsert)
-    logger.info("seeded %d demo emails for user %s account %s", count, user_id, account_id)
-    return count

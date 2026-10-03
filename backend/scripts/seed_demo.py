@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
-from app.db.seed import seed_demo_emails
+from app.demo.seed import seed_demo_emails
 from supabase import create_client
 
 
