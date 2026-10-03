@@ -1,89 +1,79 @@
-# CLAUDE.md — InboxIQ Conventions
+# CLAUDE.md — InboxIQ conventions
 
 ## Project
-InboxIQ is an AI-powered unified email management web app. SPEC.md is
-the product spec, ARCHITECTURE.md is the technical plan, README.md is
-the developer onboarding doc. Always read all three before starting work.
+InboxIQ is an AI-powered email triage app. README.md covers setup and usage;
+docs/architecture.md covers the design. Read both before starting work.
 
-## Stack (locked — do not deviate)
-- Frontend: Next.js 14 (App Router) + TypeScript (strict) + Tailwind + shadcn/ui
-- Backend: FastAPI (Python 3.11+) + Pydantic v2 + httpx async
-- DB: Supabase (PostgreSQL) — RLS enabled on every table
-- AI: OpenAI GPT-4o, JSON mode, official Python SDK
+## Stack
+- Frontend: Next.js 14 (App Router) + TypeScript (strict) + Tailwind + shadcn/ui + TanStack Query
+- Backend: FastAPI (Python 3.11) + Pydantic v2 + httpx
+- DB/Auth: Supabase (Postgres) with RLS enabled on every table
+- AI: OpenRouter with Anthropic fallback, via `app/services/ai_client.py`
 - Email: Gmail API via google-api-python-client
 - Deploy: Vercel (frontend), Railway (backend)
 
 ## Folder structure
-inboxiq/
+```
+InboxIQ/
 ├── frontend/
-│   ├── app/                 # Next.js App Router pages
-│   ├── components/          # React components, kebab-case files
-│   ├── lib/                 # Client utilities, API client, supabase clients
-│   ├── types/               # Shared TS types
-│   └── tests/               # Vitest + Playwright
+│   ├── app/            # Next.js App Router pages
+│   ├── components/     # React components, kebab-case files
+│   ├── lib/            # API client, React Query hooks, Supabase clients
+│   ├── types/          # Shared TS types
+│   └── tests/          # Vitest (unit) + Playwright (e2e)
 ├── backend/
 │   ├── app/
-│   │   ├── main.py
-│   │   ├── routers/         # One file per resource
-│   │   ├── services/        # Business logic (gmail, openai, triage)
-│   │   ├── models/          # Pydantic request/response models
-│   │   ├── db/              # Supabase client + typed query helpers
-│   │   ├── prompts/         # Static AI prompt constants
-│   │   ├── core/            # Config, security, FastAPI dependencies
-│   │   └── tasks/           # Background jobs (sync, AI worker)
-│   ├── tests/
-│   └── supabase/migrations/ # Numbered SQL files
-├── plans/                   # Saved PLAN outputs from Claude chat
-├── SPEC.md
-├── ARCHITECTURE.md
-├── README.md
-└── CLAUDE.md
+│   │   ├── core/       # Config, auth, errors, background tasks, clock, logging
+│   │   ├── routers/    # One file per resource; thin
+│   │   ├── services/   # Business logic (Gmail, AI, triage, contacts, digest)
+│   │   ├── db/         # Typed Supabase queries; no FastAPI imports
+│   │   ├── models/     # Pydantic models
+│   │   ├── prompts/    # Static AI prompt constants
+│   │   ├── tasks/      # AI worker and scheduler
+│   │   └── demo/       # DEMO_MODE fixtures and seeding
+│   ├── tests/          # Mirrors app/
+│   └── supabase/       # Numbered SQL migrations + RLS tests
+└── docs/               # Architecture and screenshots
+```
 
 ## Coding rules
-- TypeScript: strict mode, no `any` without a comment justifying.
-- Python: full type hints, Pydantic models for every request/response,
-  `from __future__ import annotations` at the top of every file.
-- No raw SQL in routers. All DB access through `app/db/` helpers that
-  return typed Pydantic models.
-- No secrets in code. Config via env vars through `app/core/config.py`
-  (Pydantic Settings).
-- Async everywhere on backend: `httpx.AsyncClient`, `asyncio.gather`.
-- Commit format: Conventional Commits (`feat(inbox): ...`, `fix(auth): ...`).
-  Reference issue number: `feat(inbox): triage badges (#3)`.
-- Branch names: `issue-N-short-slug`.
+- Layering: routers → services → db. db helpers never import FastAPI or services.
+- Errors: raise `app.core.errors` domain exceptions (`NotFoundError`,
+  `ConflictError`, `BadRequestError`, `RateLimitedError`). `HTTPException` is
+  used only in `app/core/auth.py`. Responses use `{"detail": {"code", "message"}}`.
+- Background work: `app.core.background.spawn`, never a bare `asyncio.create_task`.
+- Time: `app.core.clock.utc_now()` / `utc_today()`; never naive datetimes.
+- Python: full type hints, `from __future__ import annotations`, Pydantic models
+  for every request and response. Config comes only from `app/core/config.py`.
+- TypeScript: strict mode; no `any` without a comment explaining why. Server
+  state goes through React Query hooks in `lib/queries/`.
+- Commits: Conventional Commits (`feat(inbox): ...`, `fix(auth): ...`).
 
 ## Testing rules
-- Backend: pytest + pytest-asyncio. Mock external APIs (Gmail, OpenAI)
-  with `respx` for httpx + a stub Supabase client. Coverage ≥80% on
-  `services/` and `routers/`.
-- Frontend: Vitest for component logic. Playwright for ONE happy-path
-  E2E per issue.
-- Test files mirror source: `app/services/triage.py` →
-  `tests/services/test_triage.py`.
+- Run `make lint typecheck test` before committing.
+- Backend: pytest. Mock Gmail and LLM providers; for query-builder behavior use
+  the real client with respx (see `tests/db/test_query_builders.py`) rather than
+  MagicMock chains, which accept calls the real builder rejects.
+- Frontend: Vitest for components and hooks; Playwright for one happy path per
+  page, with every API call mocked through `tests/e2e/fixtures.ts`.
+- Bug fixes start with a failing test.
 
-## AI rules (critical)
-- All OpenAI calls use JSON mode: `response_format={"type":"json_object"}`.
-- Validate every AI response with a Pydantic model before use. If
-  validation fails: log the raw response, mark email `ai_processed=false`
-  to retry next cycle, do not raise.
-- Triage system prompts are STATIC constants in `app/prompts/`. Never
-  template user data into the system prompt — user data goes in the
-  user message only.
-- Each context mode has its own constant: `TRIAGE_PROMPT_JOB_HUNTING`,
-  `TRIAGE_PROMPT_SHOPPING`, `TRIAGE_PROMPT_SCHOOL`, `TRIAGE_PROMPT_DAILY`.
+## AI rules
+- Validate every model response with a Pydantic model before use. On failure,
+  record the attempt and leave the email unprocessed so the worker retries
+  (up to 3 attempts).
+- System prompts are static constants in `app/prompts/`, one per context mode.
+  Email content goes in the user message only.
+- Never log full model responses; they contain email content.
 
 ## Security rules
-- Supabase RLS on every table. App-layer checks are defense-in-depth,
-  not the primary boundary.
-- OAuth tokens never leave the backend. Frontend gets at most a boolean
-  `connected` and the `email_address` string.
-- Backend verifies the Supabase JWT on every authenticated request via
-  a FastAPI dependency. Never trust a `user_id` from the request body.
-- CORS allowlist is exact: deployed frontend URL + http://localhost:3000.
-  No wildcards.
-- Service role key is loaded ONLY in `app/db/supabase.py`. If you find
-  it referenced anywhere else, that's a bug.
+- RLS on every table; app-level user scoping is defense in depth, not the boundary.
+- OAuth tokens never leave the backend.
+- Every authenticated route uses `get_current_user`; never trust a `user_id`
+  from the request body.
+- The service-role key is read only in `app/db/supabase.py`.
+- OAuth `return_to` must be a same-origin path (`is_safe_return_path`).
 
-## When you're stuck or ambiguous
-Stop and ask. List the decision points with options + tradeoffs. Do
-not silently invent behavior the spec doesn't call for.
+## When stuck
+Stop and ask. List the decision points with options and trade-offs; don't
+invent behavior the README or architecture doc doesn't describe.
