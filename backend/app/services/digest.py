@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 from uuid import UUID
 
+from app.core.clock import utc_now, utc_today
 from app.db.emails import (
     get_digest,
     list_action_required_recent,
@@ -71,9 +72,9 @@ async def generate_daily_digest(user_id: UUID) -> Digest:
 
 
 async def get_or_create_today_digest(user_id: UUID) -> Digest:
-    today = date.today()
+    today = utc_today()
     cached = await get_digest(user_id, today)
-    if cached and (datetime.now(UTC) - cached.generated_at).total_seconds() < 3600:
+    if cached and (utc_now() - cached.generated_at).total_seconds() < 3600:
         user = await get_user(user_id)
         return cached.payload.model_copy(
             update={"generated_at": cached.generated_at, "context": user.default_context}

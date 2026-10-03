@@ -11,7 +11,7 @@ from app.core.auth import UserClaims, get_current_user
 from app.db.contact_tags import UniqueViolation
 from app.main import app
 from app.models.contact_tag import ContactTag
-from app.services.contact_tags import JOBS, ContactTagJob
+from app.services.contact_tags import CONTACT_TAG_JOBS
 
 _USER_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 _OTHER_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -42,7 +42,7 @@ def authed_client() -> TestClient:
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
-    JOBS.clear()
+    CONTACT_TAG_JOBS.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -215,22 +215,22 @@ def test_patch_contact_not_found(authed_client: TestClient) -> None:
 
 
 def test_get_contact_job_for_owner(authed_client: TestClient) -> None:
-    job = ContactTagJob(job_id="job1", user_id=_USER_ID, total=50, processed=30)
-    JOBS["job1"] = job
+    job = CONTACT_TAG_JOBS.create(_USER_ID, total=50)
+    job.processed = 30
 
-    resp = authed_client.get("/contacts/jobs/job1")
+    resp = authed_client.get(f"/contacts/jobs/{job.job_id}")
 
     assert resp.status_code == 200
     data = resp.json()
+    assert data["job_id"] == job.job_id
     assert data["status"] == "running"
     assert data["processed"] == 30
     assert data["total"] == 50
 
 
 def test_get_contact_job_for_other_user_returns_404(authed_client: TestClient) -> None:
-    job = ContactTagJob(job_id="job2", user_id=_OTHER_ID, total=10)
-    JOBS["job2"] = job
+    job = CONTACT_TAG_JOBS.create(_OTHER_ID, total=10)
 
-    resp = authed_client.get("/contacts/jobs/job2")
+    resp = authed_client.get(f"/contacts/jobs/{job.job_id}")
 
     assert resp.status_code == 404

@@ -17,7 +17,7 @@ from app.core.logging_middleware import (
     config_presence_summary,
     request_logging_middleware,
 )
-from app.routers import accounts, auth, contacts, digest, emails, pickup, triage, users
+from app.routers import accounts, auth, contacts, digest, emails, jobs, pickup, users
 from app.tasks.ai_worker import run_forever as run_ai_worker
 from app.tasks.scheduler import make_scheduler
 
@@ -81,7 +81,7 @@ app.include_router(users.router)
 app.include_router(accounts.router)
 app.include_router(emails.router)
 app.include_router(pickup.router)
-app.include_router(triage.router)
+app.include_router(jobs.router)
 app.include_router(digest.router)
 app.include_router(contacts.router)
 

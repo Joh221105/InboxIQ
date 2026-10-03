@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import asyncio
+import logging
 import re
-import uuid
-from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from typing import Literal
 from uuid import UUID
 
+from app.core.background import spawn
 from app.db import contact_tags as db
+from app.models.job import Job
+from app.services.jobs import JobRegistry
+
+logger = logging.getLogger(__name__)
 
 VALID_TAG_TYPES = {"professor", "friend", "recruiter", "custom"}
 
@@ -65,29 +66,7 @@ async def find_contact_tag(user_id: UUID, sender_email: str) -> UUID | None:
     return full_match if full_match else domain_match
 
 
-@dataclass
-class ContactTagJob:
-    job_id: str
-    user_id: UUID
-    total: int
-    processed: int = 0
-    status: Literal["running", "done", "failed"] = "running"
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-
-JOBS: dict[str, ContactTagJob] = {}
-_JOB_TTL_SECONDS = 3600
-
-
-def _evict_stale_contact_jobs() -> None:
-    cutoff = datetime.now(UTC) - timedelta(seconds=_JOB_TTL_SECONDS)
-    stale = [
-        job_id
-        for job_id, job in list(JOBS.items())
-        if job.status in ("done", "failed") and job.created_at < cutoff
-    ]
-    for job_id in stale:
-        JOBS.pop(job_id, None)
+CONTACT_TAG_JOBS = JobRegistry()
 
 
 async def apply_retroactive_async(
@@ -95,17 +74,17 @@ async def apply_retroactive_async(
     user_id: UUID,
     identifier: str,
 ) -> str:
-    _evict_stale_contact_jobs()
-    job_id = uuid.uuid4().hex
     total = await db.count_emails_for_identifier(user_id, identifier)
-    job = ContactTagJob(job_id=job_id, user_id=user_id, total=total)
-    JOBS[job_id] = job
-    asyncio.create_task(_process_retroactive(job, tag_id, user_id, identifier))
-    return job_id
+    job = CONTACT_TAG_JOBS.create(user_id, total=total)
+    spawn(
+        _process_retroactive(job, tag_id, user_id, identifier),
+        name=f"contact-retroactive:{job.job_id}",
+    )
+    return job.job_id
 
 
 async def _process_retroactive(
-    job: ContactTagJob,
+    job: Job,
     tag_id: UUID,
     user_id: UUID,
     identifier: str,
@@ -115,4 +94,5 @@ async def _process_retroactive(
         job.processed = updated
         job.status = "done"
     except Exception:
+        logger.exception("retroactive tagging failed for tag %s", tag_id)
         job.status = "failed"

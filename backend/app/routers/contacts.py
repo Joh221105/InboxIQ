@@ -16,17 +16,17 @@ from app.db.contact_tags import (
     update_tag,
 )
 from app.models.contact_tag import (
-    ContactJobStatus,
     ContactsGrouped,
     ContactTag,
     ContactTagCreate,
     ContactTagUpdate,
     CreateContactResponse,
 )
+from app.models.job import JobStatusResponse
 from app.services.contact_tags import (
+    CONTACT_TAG_JOBS,
     CUSTOM_PALETTE,
     DEFAULT_COLORS,
-    JOBS,
     SYNC_THRESHOLD,
     VALID_TAG_TYPES,
     apply_retroactive_async,
@@ -130,17 +130,9 @@ async def patch_contact(
     return updated
 
 
-@router.get("/contacts/jobs/{job_id}", response_model=ContactJobStatus)
+@router.get("/contacts/jobs/{job_id}")
 async def get_contact_job(
     job_id: str,
     claims: UserClaims = Depends(get_current_user),
-) -> ContactJobStatus:
-    job = JOBS.get(job_id)
-    if not job or job.user_id != claims.user_id:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return ContactJobStatus(
-        job_id=job.job_id,
-        status=job.status,
-        processed=job.processed,
-        total=job.total,
-    )
+) -> JobStatusResponse:
+    return JobStatusResponse.from_job(CONTACT_TAG_JOBS.get_for_user(job_id, claims.user_id))

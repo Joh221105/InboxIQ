@@ -10,26 +10,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import timedelta
 from uuid import UUID
 
+from app.core.clock import utc_now, utc_today
 from app.db.supabase import get_service_client
 
 logger = logging.getLogger(__name__)
 
-_NOW = None  # resolved lazily per call so dates are always current
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
-
 
 def _days_ago(n: float) -> str:
-    return (_now() - timedelta(days=n)).isoformat()
+    return (utc_now() - timedelta(days=n)).isoformat()
 
 
 def _days_from_now(n: int) -> str:
-    return (date.today() + timedelta(days=n)).isoformat()
+    return (utc_today() + timedelta(days=n)).isoformat()
 
 
 def _build_emails() -> list[dict]:

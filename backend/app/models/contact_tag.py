@@ -39,10 +39,3 @@ class CreateContactResponse(BaseModel):
     tag: ContactTag
     retroactive_count: int
     job_id: str | None = None
-
-
-class ContactJobStatus(BaseModel):
-    job_id: str
-    status: str
-    processed: int
-    total: int

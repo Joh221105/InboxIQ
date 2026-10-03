@@ -4,10 +4,11 @@ import asyncio
 import base64
 import logging
 import re
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
+from app.core.clock import utc_now, utc_today
 from app.db.supabase import get_service_client
 from app.models.ai import Digest, StoredDigest
 from app.models.email import (
@@ -245,7 +246,7 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
         changes["is_archived"] = patch.is_archived
     if patch.pickup_used is not None:
         changes["pickup_used"] = patch.pickup_used
-        changes["pickup_used_at"] = datetime.now(UTC).isoformat() if patch.pickup_used else None
+        changes["pickup_used_at"] = utc_now().isoformat() if patch.pickup_used else None
         if patch.pickup_used:
             changes["is_archived"] = True
     if patch.is_read is not None:
@@ -276,7 +277,7 @@ async def list_pickup_codes(
     used: bool,
     include_expired: bool = False,
 ) -> list[PickupCodeRow]:
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
 
     def _fetch() -> list[dict[str, Any]]:
         q = (
@@ -314,7 +315,7 @@ async def list_pickup_codes(
 
 
 async def get_email_counts(user_id: UUID) -> EmailCounts:
-    now = datetime.now(UTC)
+    now = utc_now()
     cached = _counts_cache.get(user_id)
     if cached and now - cached[0] < _COUNTS_CACHE_TTL:
         return cached[1]
@@ -354,7 +355,7 @@ async def apply_triage_result(email_id: UUID, result: TriageResult) -> None:
         "retailer": result.retailer,
         "locker_location": result.locker_location,
         "ai_processed": True,
-        "last_ai_attempt_at": datetime.now(UTC).isoformat(),
+        "last_ai_attempt_at": utc_now().isoformat(),
     }
 
     def _update() -> None:
@@ -365,7 +366,7 @@ async def apply_triage_result(email_id: UUID, result: TriageResult) -> None:
 
 
 async def mark_ai_failed(email_id: UUID) -> int:
-    now = datetime.now(UTC).isoformat()
+    now = utc_now().isoformat()
 
     def _update() -> int:
         result = (
@@ -393,7 +394,7 @@ async def mark_ai_failed(email_id: UUID) -> int:
 
 
 async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
-    cutoff = datetime.now(UTC) - timedelta(seconds=60)
+    cutoff = utc_now() - timedelta(seconds=60)
 
     def _fetch() -> list[dict[str, Any]]:
         result = (
@@ -452,7 +453,7 @@ async def update_email_triage_only(
 
 
 async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Email]:
-    since = datetime.now(UTC) - timedelta(hours=hours)
+    since = utc_now() - timedelta(hours=hours)
 
     def _fetch() -> list[dict[str, Any]]:
         result = (
@@ -472,7 +473,7 @@ async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Em
 
 
 async def list_upcoming_deadlines(user_id: UUID, days: int = 7) -> list[Email]:
-    today = date.today()
+    today = utc_today()
     end = today + timedelta(days=days)
 
     def _fetch() -> list[dict[str, Any]]:
@@ -522,7 +523,7 @@ async def upsert_digest(user_id: UUID, digest_date: date, digest: Digest) -> Non
         "digest_date": digest_date.isoformat(),
         "payload": digest.model_dump(mode="json"),
         "degraded": digest.degraded,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": utc_now().isoformat(),
     }
 
     def _upsert() -> None:
