@@ -87,7 +87,7 @@ class EmailFilters(BaseModel):
     deadline_before: date | None = None
     order: Literal["received_desc", "deadline_asc"] = "received_desc"
     cursor: str | None = None
-    limit: int = 50
+    limit: int = Field(default=50, ge=1, le=100)
 
     @field_validator("sender_search")
     @classmethod

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from app.models.email import EmailFilters, ParsedEmail
+from tests.db.test_email_pagination import RecordingQuery
 
 
 @pytest.mark.asyncio
@@ -76,10 +78,8 @@ async def test_upsert_email_passes_contact_tag_id_to_rpc() -> None:
 async def test_list_emails_returns_empty_for_no_results() -> None:
     from app.db.emails import list_emails
 
-    mock_client = MagicMock()
-    mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.execute.return_value.data = []
-
-    with patch("app.db.emails.get_service_client", return_value=mock_client):
+    client = SimpleNamespace(table=lambda _name: RecordingQuery([]))
+    with patch("app.db.emails.get_service_client", return_value=client):
         result = await list_emails(EmailFilters(user_id=uuid4()))
 
     assert result.items == []

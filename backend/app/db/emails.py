@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
+from postgrest.types import CountMethod
+
 from app.core.clock import utc_now, utc_today
+from app.core.errors import BadRequestError
 from app.db.supabase import get_service_client
 from app.models.ai import Digest, StoredDigest, TriageResult
 from app.models.email import (
@@ -20,6 +25,7 @@ from app.models.email import (
     EmailUpdate,
     ParsedEmail,
     PickupCodeRow,
+    TriageCategory,
 )
 
 _log = logging.getLogger(__name__)
@@ -40,15 +46,38 @@ def _sanitize_fts_input(value: str | None) -> str | None:
     return collapsed or None
 
 
-def _cursor_encode(received_at: datetime, email_id: UUID) -> str:
-    raw = f"{received_at.isoformat()}|{email_id}"
-    return base64.urlsafe_b64encode(raw.encode()).decode()
+@dataclass(frozen=True)
+class _Cursor:
+    rank: int
+    received_at: str
+    email_id: str
 
 
-def _cursor_decode(cursor: str) -> tuple[str, str]:
-    raw = base64.urlsafe_b64decode(cursor.encode()).decode()
-    rt, eid = raw.split("|", 1)
-    return rt, eid
+def _encode_cursor(row: dict[str, Any]) -> str:
+    payload = {"r": row["triage_rank"], "t": row["received_at"], "i": row["id"]}
+    return base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> _Cursor:
+    try:
+        data = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        return _Cursor(
+            rank=int(data["r"]), received_at=str(data["t"]), email_id=str(UUID(data["i"]))
+        )
+    except (ValueError, KeyError, TypeError) as exc:  # binascii/JSON errors are ValueErrors
+        raise BadRequestError("Invalid pagination cursor.", code="invalid_cursor") from exc
+
+
+def _keyset_filter(cursor: _Cursor) -> str:
+    """PostgREST ``or`` filter for rows strictly after *cursor* in
+    (triage_rank ASC, received_at DESC, id DESC) order. Timestamps are quoted
+    because they contain PostgREST-reserved characters."""
+    r, t, i = cursor.rank, cursor.received_at, cursor.email_id
+    return (
+        f"triage_rank.gt.{r},"
+        f'and(triage_rank.eq.{r},received_at.lt."{t}"),'
+        f'and(triage_rank.eq.{r},received_at.eq."{t}",id.lt.{i})'
+    )
 
 
 def _build_contact_tag(row_tag: dict | None) -> ContactTagInfo | None:
@@ -59,6 +88,7 @@ def _build_contact_tag(row_tag: dict | None) -> ContactTagInfo | None:
 
 
 def _row_to_email(row: dict[str, Any]) -> Email:
+    row = dict(row)
     nested = row.pop("connected_accounts", None) or {}
     account_color = nested.get("color") if isinstance(nested, dict) else None
     account_email = nested.get("email_address") if isinstance(nested, dict) else None
@@ -128,7 +158,17 @@ async def upsert_email(
 
 
 async def list_emails(filters: EmailFilters) -> EmailListPage:
-    limit = min(filters.limit, 100)
+    """One page of the inbox.
+
+    The default order is triage priority then recency, paginated with a
+    keyset cursor; ``deadline_asc`` returns a single, unpaginated page.
+    """
+    paginated = filters.order == "received_desc"
+    if filters.cursor and not paginated:
+        raise BadRequestError(
+            "Cursors are only supported for received_desc order.", code="invalid_cursor"
+        )
+    cursor = _decode_cursor(filters.cursor) if filters.cursor else None
 
     def _fetch() -> list[dict[str, Any]]:
         q = (
@@ -168,53 +208,26 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         if filters.deadline_before:
             q = q.lte("deadline_extracted", filters.deadline_before.isoformat())
 
-        if filters.cursor:
-            rt, eid = _cursor_decode(filters.cursor)
-            q = q.or_(f"received_at.lt.{rt},and(received_at.eq.{rt},id.lt.{eid})")
-
-        if filters.order == "deadline_asc":
+        if paginated:
+            if cursor is not None:
+                q = q.or_(_keyset_filter(cursor))
+            q = (
+                q.order("triage_rank", desc=False)
+                .order("received_at", desc=True)
+                .order("id", desc=True)
+            )
+        else:
             q = q.order("deadline_extracted", desc=False, nullsfirst=False).order(
                 "received_at", desc=True
             )
-        elif filters.triage_category:
-            q = q.order("received_at", desc=True).order("id", desc=True)
-        else:
-            # Supabase/PostgREST cannot express CASE ordering directly here.
-            # Keep the DB order deterministic, then apply the Issue 2 triage priority below.
-            q = q.order("received_at", desc=True).order("id", desc=True)
-        q = q.limit(limit + 1)
+        q = q.limit(filters.limit + 1)
         return q.execute().data or []
 
     rows = await asyncio.to_thread(_fetch)
-    if not filters.triage_category and filters.order == "received_desc":
-        priority = {
-            "action_required": 1,
-            "worth_reading": 2,
-            "auto_archive": 3,
-        }
-        rows.sort(
-            key=lambda row: (
-                priority.get(str(row.get("ai_category") or row.get("triage_category") or ""), 4),
-                -(
-                    datetime.fromisoformat(row["received_at"].replace("Z", "+00:00")).timestamp()
-                    if row.get("received_at")
-                    else 0
-                ),
-                str(row.get("id", "")),
-            )
-        )
-
-    has_more = len(rows) > limit
-    page_rows = rows[:limit]
-    items = [_row_to_email(r) for r in page_rows]
-
-    next_cursor = None
-    if has_more and items:
-        last = items[-1]
-        if last.received_at:
-            next_cursor = _cursor_encode(last.received_at, last.id)
-
-    return EmailListPage(items=items, next_cursor=next_cursor)
+    page = rows[: filters.limit]
+    has_more = paginated and len(rows) > filters.limit
+    next_cursor = _encode_cursor(page[-1]) if has_more else None
+    return EmailListPage(items=[_row_to_email(r) for r in page], next_cursor=next_cursor)
 
 
 async def get_email(email_id: UUID, user_id: UUID) -> Email | None:
@@ -318,23 +331,26 @@ async def get_email_counts(user_id: UUID) -> EmailCounts:
     if cached and now - cached[0] < _COUNTS_CACHE_TTL:
         return cached[1]
 
-    def _fetch() -> list[dict[str, Any]]:
-        result = (
+    def _count(category: TriageCategory | None) -> int:
+        q = (
             get_service_client()
             .table("emails")
-            .select("ai_category")
+            .select("id", count=CountMethod.exact, head=True)
             .eq("user_id", str(user_id))
             .eq("is_archived", False)
-            .execute()
         )
-        return result.data or []
+        if category is not None:
+            q = q.eq("ai_category", category)
+        return q.execute().count or 0
 
-    rows = await asyncio.to_thread(_fetch)
+    total, action, worth, archive = await asyncio.gather(
+        *(
+            asyncio.to_thread(_count, category)
+            for category in (None, "action_required", "worth_reading", "auto_archive")
+        )
+    )
     counts = EmailCounts(
-        all=len(rows),
-        action_required=sum(1 for row in rows if row.get("ai_category") == "action_required"),
-        worth_reading=sum(1 for row in rows if row.get("ai_category") == "worth_reading"),
-        auto_archive=sum(1 for row in rows if row.get("ai_category") == "auto_archive"),
+        all=total, action_required=action, worth_reading=worth, auto_archive=archive
     )
     _counts_cache[user_id] = (now, counts)
     return counts
