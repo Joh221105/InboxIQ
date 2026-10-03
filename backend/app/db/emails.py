@@ -32,6 +32,7 @@ _log = logging.getLogger(__name__)
 
 _COUNTS_CACHE_TTL = timedelta(seconds=30)
 _MAX_AI_ATTEMPTS = 3
+_TRIAGE_RANKS = range(1, 4)  # emails.triage_rank values (migration 022)
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
 
 _EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags!contact_tag_id(tag,custom_label,color)"
@@ -59,10 +60,18 @@ def _encode_cursor(row: dict[str, Any]) -> str:
 
 
 def _decode_cursor(cursor: str) -> _Cursor:
+    """Parse a client-supplied cursor strictly; its values end up in a PostgREST filter."""
     try:
         data = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        rank, received_at, email_id = data["r"], data["t"], data["i"]
+        if not isinstance(rank, int) or rank not in _TRIAGE_RANKS:
+            raise ValueError("cursor rank out of range")
+        if not isinstance(received_at, str) or not isinstance(email_id, str):
+            raise TypeError("cursor fields must be strings")
         return _Cursor(
-            rank=int(data["r"]), received_at=str(data["t"]), email_id=str(UUID(data["i"]))
+            rank=rank,
+            received_at=datetime.fromisoformat(received_at).isoformat(),
+            email_id=str(UUID(email_id)),
         )
     except (ValueError, KeyError, TypeError) as exc:  # binascii/JSON errors are ValueErrors
         raise BadRequestError("Invalid pagination cursor.", code="invalid_cursor") from exc
@@ -335,13 +344,15 @@ async def get_email_counts(user_id: UUID) -> EmailCounts:
         q = (
             get_service_client()
             .table("emails")
-            .select("id", count=CountMethod.exact, head=True)
+            # head=True would skip the body, but postgrest 0.17 then reports count=0;
+            # fetch one row instead and read the total from Content-Range.
+            .select("id", count=CountMethod.exact)
             .eq("user_id", str(user_id))
             .eq("is_archived", False)
         )
         if category is not None:
             q = q.eq("ai_category", category)
-        return q.execute().count or 0
+        return q.limit(1).execute().count or 0
 
     total, action, worth, archive = await asyncio.gather(
         *(

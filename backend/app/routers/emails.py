@@ -6,6 +6,8 @@ from html import escape
 from typing import Literal
 from uuid import UUID
 
+import google.auth.exceptions
+import httplib2
 import httpx
 from fastapi import APIRouter, Depends, Query
 from googleapiclient.errors import HttpError
@@ -29,6 +31,18 @@ from app.services.gmail_sync import archive_gmail_message
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/emails", tags=["emails"])
+
+# Errors the Gmail client can raise for an unreachable or rejecting API: HTTP
+# status errors, token refresh failures, and transport errors from httplib2,
+# google-auth and the OS (timeouts, resets).
+_GMAIL_FAILURES = (
+    HttpError,
+    RefreshFailed,
+    httpx.HTTPError,
+    httplib2.HttpLib2Error,
+    google.auth.exceptions.TransportError,
+    OSError,
+)
 
 
 @router.get("")
@@ -84,7 +98,7 @@ async def patch_email(
             raise NotFoundError("Email not found.")
         try:
             await archive_gmail_message(existing.account_id, existing.gmail_id)
-        except (HttpError, RefreshFailed, httpx.HTTPError):
+        except _GMAIL_FAILURES:
             # Marking the code used matters more than archiving it in Gmail.
             logger.warning("gmail archive failed for email_id=%s; marking used anyway", email_id)
     updated = await update_email(email_id, claims.user_id, body)

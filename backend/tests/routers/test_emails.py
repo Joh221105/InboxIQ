@@ -258,3 +258,21 @@ def test_patch_email_archives_gmail_when_pickup_marked_used(authed_client: TestC
 def test_list_emails_rejects_malformed_since(authed_client: TestClient) -> None:
     resp = authed_client.get("/emails?since=yesterday")
     assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("error", [TimeoutError("gmail timed out"), OSError("connection reset")])
+def test_mark_pickup_used_survives_gmail_transport_errors(
+    authed_client: TestClient, error: Exception
+) -> None:
+    email = _make_email()
+    with (
+        patch("app.routers.emails.get_email", new_callable=AsyncMock, return_value=email),
+        patch("app.routers.emails.archive_gmail_message", new=AsyncMock(side_effect=error)),
+        patch(
+            "app.routers.emails.update_email", new_callable=AsyncMock, return_value=email
+        ) as update,
+    ):
+        resp = authed_client.patch(f"/emails/{email.id}", json={"pickup_used": True})
+
+    assert resp.status_code == 200
+    update.assert_awaited_once()

@@ -97,8 +97,10 @@ minute per user. The client polls `GET /jobs/{id}` until the job finishes.
 | `ai_usage` | Per-call token counts and cost |
 
 Migrations live in `backend/supabase/migrations/` (001–022) and are applied in
-order. `emails.triage_rank` (022) is a generated column that lets the inbox
-order by priority and recency in a single keyset-paginated query.
+order, before the API version that depends on them is deployed.
+`emails.triage_rank` (022) is a generated column that lets the inbox order by
+priority and recency in a single keyset-paginated query; unclassified mail
+ranks with *worth reading* so it is never buried.
 
 ## Security model
 

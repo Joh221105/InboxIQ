@@ -15,8 +15,14 @@ from app.models.email import EmailFilters
 _USER = uuid4()
 
 
-def _row(rank: int, received_at: str, email_id: str | None = None) -> dict[str, Any]:
-    category = {1: "action_required", 2: "worth_reading", 3: "auto_archive"}.get(rank)
+_DEFAULT_CATEGORY = {1: "action_required", 2: "worth_reading", 3: "auto_archive"}
+
+
+def _row(
+    rank: int, received_at: str, email_id: str | None = None, *, unclassified: bool = False
+) -> dict[str, Any]:
+    # Mirrors migration 022: unclassified mail ranks with worth_reading (2).
+    category = None if unclassified else _DEFAULT_CATEGORY[rank]
     return {
         "id": email_id or str(uuid4()),
         "user_id": str(_USER),
@@ -149,7 +155,7 @@ async def test_walking_pages_visits_every_email_exactly_once() -> None:
         _row(2, same_time),
         _row(2, same_time),
         _row(1, "2026-05-04T08:00:00+00:00"),
-        _row(4, "2026-05-06T08:00:00+00:00"),
+        _row(2, "2026-05-06T08:00:00+00:00", unclassified=True),
         _row(2, "2026-05-03T08:00:00+00:00"),
     ]
     seen: list[str] = []
@@ -162,3 +168,34 @@ async def test_walking_pages_visits_every_email_exactly_once() -> None:
         cursor = page.next_cursor
     assert sorted(seen) == sorted(r["id"] for r in rows)
     assert len(seen) == len(set(seen))
+
+
+def _raw_cursor(payload: dict[str, Any]) -> str:
+    import base64
+    import json
+
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"r": 1, "t": "2026-05-01T10:00:00+00:00", "i": 123},  # non-string id
+        {"r": 1, "t": "garbage", "i": str(uuid4())},  # unparseable timestamp
+        {
+            "r": 1,
+            "t": '2026-05-01"),user_id.neq.0,and(id.eq."',
+            "i": str(uuid4()),
+        },  # filter injection
+        {"r": 4, "t": "2026-05-01T10:00:00+00:00", "i": str(uuid4())},  # rank out of range
+    ],
+)
+async def test_tampered_cursor_payloads_raise_bad_request(payload: dict[str, Any]) -> None:
+    with pytest.raises(BadRequestError) as exc:
+        await _list(RecordingQuery([]), cursor=_raw_cursor(payload))
+    assert exc.value.code == "invalid_cursor"
+
+
+def test_keyset_filter_uses_normalized_timestamp() -> None:
+    cursor = _decode_cursor(_raw_cursor({"r": 2, "t": "2026-05-01T10:00:00Z", "i": str(uuid4())}))
+    assert cursor.received_at == "2026-05-01T10:00:00+00:00"

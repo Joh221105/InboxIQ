@@ -1,40 +1,34 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-from typing import Any
-from unittest.mock import patch
 from uuid import uuid4
+
+import httpx
+import respx
 
 from app.db import emails as emails_db
 from app.db.emails import get_email_counts
+from supabase import Client
+from tests.db.test_query_builders import REST, real_client  # noqa: F401  (fixture)
 
-COUNTS = {None: 2500, "action_required": 40, "worth_reading": 300, "auto_archive": 2160}
-
-
-class _CountQuery:
-    def __init__(self) -> None:
-        self.category: str | None = None
-        self.select_kwargs: dict[str, Any] = {}
-
-    def select(self, *_columns: str, **kwargs: Any) -> _CountQuery:
-        self.select_kwargs = kwargs
-        return self
-
-    def eq(self, column: str, value: Any) -> _CountQuery:
-        if column == "ai_category":
-            self.category = value
-        return self
-
-    def execute(self) -> SimpleNamespace:
-        assert self.select_kwargs == {"count": "exact", "head": True}
-        return SimpleNamespace(data=[], count=COUNTS[self.category])
+TOTALS = {None: 2500, "action_required": 40, "worth_reading": 300, "auto_archive": 2160}
 
 
-async def test_counts_use_exact_count_queries_without_a_row_cap() -> None:
+@respx.mock
+async def test_counts_come_from_content_range_without_a_row_cap(real_client: Client) -> None:  # noqa: F811
     emails_db._counts_cache.clear()
-    client = SimpleNamespace(table=lambda _name: _CountQuery())
-    with patch("app.db.emails.get_service_client", return_value=client):
-        counts = await get_email_counts(uuid4())
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        category = request.url.params.get("ai_category")
+        total = TOTALS[category.removeprefix("eq.") if category else None]
+        headers = {"Content-Range": f"0-0/{total}"}
+        if request.method == "HEAD":  # PostgREST sends no body for HEAD
+            return httpx.Response(200, headers=headers)
+        return httpx.Response(200, json=[{"id": "x"}], headers=headers)
+
+    respx.route(url__startswith=f"{REST}/emails").mock(side_effect=respond)
+
+    counts = await get_email_counts(uuid4())
+
     assert counts.model_dump() == {
         "all": 2500,
         "action_required": 40,

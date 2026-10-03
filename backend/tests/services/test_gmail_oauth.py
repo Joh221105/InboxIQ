@@ -201,3 +201,23 @@ async def test_refresh_tokens_race_only_one_google_call() -> None:
         )
 
     assert google_calls == 1, f"Expected 1 Google call, got {google_calls}"
+
+
+@respx.mock
+async def test_exchange_code_wraps_network_errors() -> None:
+    from app.services.gmail_oauth import OAuthExchangeFailed, exchange_code
+
+    respx.post("https://oauth2.googleapis.com/token").mock(side_effect=httpx.ConnectError("down"))
+    with pytest.raises(OAuthExchangeFailed):
+        await exchange_code("code")
+
+
+@respx.mock
+async def test_get_gmail_address_wraps_network_errors() -> None:
+    from app.services.gmail_oauth import OAuthExchangeFailed, get_gmail_address
+
+    respx.get("https://gmail.googleapis.com/gmail/v1/users/me/profile").mock(
+        side_effect=httpx.ReadTimeout("slow")
+    )
+    with pytest.raises(OAuthExchangeFailed):
+        await get_gmail_address("token")

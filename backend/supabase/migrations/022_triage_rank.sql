@@ -1,14 +1,16 @@
 -- Rank emails by triage priority so the inbox can be keyset-paginated with a
 -- single ORDER BY (priority, recency) in the database instead of re-sorting
 -- each page in the API.
+--
+-- Emails without a category (still being analyzed, or AI unavailable) rank
+-- with worth_reading so they are never buried below auto-archived mail.
 ALTER TABLE public.emails
     ADD COLUMN IF NOT EXISTS triage_rank smallint
     GENERATED ALWAYS AS (
         CASE ai_category
             WHEN 'action_required' THEN 1
-            WHEN 'worth_reading' THEN 2
             WHEN 'auto_archive' THEN 3
-            ELSE 4
+            ELSE 2
         END
     ) STORED;
 

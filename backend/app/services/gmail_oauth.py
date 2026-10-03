@@ -22,6 +22,7 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GMAIL_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+_GOOGLE_TIMEOUT = 10.0  # seconds
 
 _refresh_locks: dict[UUID, asyncio.Lock] = {}
 
@@ -107,17 +108,20 @@ def is_safe_return_path(path: str) -> bool:
 
 
 async def exchange_code(code: str) -> OAuthTokens:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "client_id": settings.gmail_client_id,
-                "client_secret": settings.gmail_client_secret,
-                "redirect_uri": settings.gmail_redirect_uri,
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=_GOOGLE_TIMEOUT) as client:
+            resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "client_id": settings.gmail_client_id,
+                    "client_secret": settings.gmail_client_secret,
+                    "redirect_uri": settings.gmail_redirect_uri,
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise OAuthExchangeFailed(f"token request failed: {exc}") from exc
     if resp.status_code != 200:
         try:
             _error_key = resp.json().get("error", "unknown")
@@ -140,11 +144,14 @@ async def exchange_code(code: str) -> OAuthTokens:
 
 
 async def get_gmail_address(access_token: str) -> str:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            GMAIL_PROFILE_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=_GOOGLE_TIMEOUT) as client:
+            resp = await client.get(
+                GMAIL_PROFILE_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.HTTPError as exc:
+        raise OAuthExchangeFailed(f"Gmail profile request failed: {exc}") from exc
     if resp.status_code != 200:
         raise OAuthExchangeFailed(f"Gmail profile fetch failed: {resp.status_code}")
     try:

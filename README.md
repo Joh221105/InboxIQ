@@ -157,7 +157,8 @@ docs/            architecture and screenshots
 - **Production URLs:** point `GMAIL_REDIRECT_URI` (and the Google Cloud
   redirect URI), `FRONTEND_URL`, and the Supabase Auth URLs at your production
   domains.
-- **Database:** apply all migrations, then run
+- **Database:** apply new migrations *before* deploying the API that needs
+  them (migrations are backward compatible with the previous API), then run
   `backend/supabase/tests/test_rls.sql` against the production database to
   confirm row-level security.
 
