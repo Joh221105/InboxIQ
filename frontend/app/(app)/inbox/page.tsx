@@ -50,14 +50,6 @@ function InboxPageContent() {
     connectedAccounts.length === 0 &&
     (accountsQuery.data?.length ?? 0) > 0;
 
-  // Persist result to localStorage as a performance hint for future page loads.
-  useEffect(() => {
-    if (accountsQuery.data === undefined) return;
-    const has = connectedAccounts.length > 0;
-    localStorage.setItem("inboxiq-has-accounts", String(has));
-  }, [accountsQuery.data, connectedAccounts.length]);
-
-  // Only derive noAccounts from the resolved query — never from localStorage.
   const noAccounts = !accountsQuery.isLoading && connectedAccounts.length === 0;
 
   const emails = useMemo(
@@ -155,7 +147,7 @@ function InboxPageContent() {
 
       <section className="flex-1 px-6 py-4">
         {emailsQuery.isLoading ? (
-          <div className="flex flex-col items-center justify-center gap-4 pt-12" style={{ background: "#dedbd5", borderRadius: "0.75rem", padding: "3rem 1.5rem" }}>
+          <div className="flex flex-col items-center justify-center gap-4 rounded-xl bg-[#dedbd5] px-6 py-12">
             <div className="relative h-[160px] w-[124px] overflow-hidden">
               <video
                 src="/bun-search.mp4"
@@ -190,12 +182,12 @@ function InboxPageContent() {
             ) : null}
             <EmailList
               emails={visibleEmails}
-            selectedId={selectedId}
-            onSelect={selectEmail}
-            onArchive={archiveEmail}
-            hasNextPage={Boolean(emailsQuery.hasNextPage)}
-            fetchNextPage={() => void emailsQuery.fetchNextPage()}
-            emptyText={emptyStateForTab(tab)}
+              selectedId={selectedId}
+              onSelect={selectEmail}
+              onArchive={archiveEmail}
+              hasNextPage={Boolean(emailsQuery.hasNextPage)}
+              fetchNextPage={() => void emailsQuery.fetchNextPage()}
+              emptyText={emptyStateForTab(tab)}
             />
           </>
         )}
