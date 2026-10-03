@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     # Required
     supabase_url: str
     supabase_service_role_key: str
-    supabase_anon_key: str
     supabase_jwt_secret: str = ""  # empty = Supabase JWKS (ES256/RS256)
     gmail_client_id: str
     gmail_client_secret: str
