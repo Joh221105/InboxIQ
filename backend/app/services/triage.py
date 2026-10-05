@@ -22,6 +22,11 @@ from app.services.ai_client import call_json_with_cost
 
 logger = logging.getLogger(__name__)
 
+# Every prompt sees at most this much of an email body. Triage and the
+# extraction steps share the cap, so a long newsletter cannot inflate tokens or
+# cost, and extraction reads the same text the classifier flagged.
+MAX_PROMPT_BODY_CHARS = 4000
+
 PICKUP_PATTERNS = [
     re.compile(r"\bpickup\s+code\b", re.I),
     re.compile(r"\bready\s+for\s+pickup\b", re.I),
@@ -39,7 +44,7 @@ def triage_message(email: Email) -> str:
     return (
         f"From: {email.sender or ''}\n"
         f"Subject: {email.subject or ''}\n"
-        f"Body: {(email.body_text or '')[:4000]}"
+        f"Body: {(email.body_text or '')[:MAX_PROMPT_BODY_CHARS]}"
     )
 
 
@@ -72,6 +77,7 @@ async def triage_email(email: Email, user_context: ContextMode) -> TriageResult:
         triage_context=user_context,
         cost_usd=triage_cost,
     )
+    excerpt = body[:MAX_PROMPT_BODY_CHARS]
 
     tasks: list[tuple[str, Awaitable[tuple[Any, Decimal]]]] = []
     if triage.has_deadline:
@@ -81,7 +87,7 @@ async def triage_email(email: Email, user_context: ContextMode) -> TriageResult:
                 "deadline",
                 call_json_with_cost(
                     system=DEADLINE_PROMPT,
-                    user=f"received_at: {received_at}\n\n{body}",
+                    user=f"received_at: {received_at}\n\n{excerpt}",
                     response_model=DeadlineResponse,
                     kind="deadline",
                     user_id=email.user_id,
@@ -95,7 +101,7 @@ async def triage_email(email: Email, user_context: ContextMode) -> TriageResult:
                 "actions",
                 call_json_with_cost(
                     system=ACTION_ITEMS_PROMPT,
-                    user=body,
+                    user=excerpt,
                     response_model=ActionItemsResponse,
                     kind="action_items",
                     user_id=email.user_id,
@@ -109,7 +115,7 @@ async def triage_email(email: Email, user_context: ContextMode) -> TriageResult:
                 "pickup",
                 call_json_with_cost(
                     system=PICKUP_CODE_PROMPT,
-                    user=f"Subject: {email.subject or ''}\nBody: {body}",
+                    user=f"Subject: {email.subject or ''}\nBody: {excerpt}",
                     response_model=PickupCodeResponse,
                     kind="pickup",
                     user_id=email.user_id,

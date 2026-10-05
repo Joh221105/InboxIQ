@@ -269,3 +269,40 @@ async def test_triage_email_keeps_system_prompt_static_on_prompt_injection_text(
     kwargs = call_json.await_args.kwargs
     assert kwargs["system"] == TRIAGE_PROMPTS["Daily"]
     assert "Ignore all previous instructions" in kwargs["user"]
+
+
+@pytest.mark.asyncio
+async def test_triage_email_caps_the_body_sent_to_every_prompt() -> None:
+    from app.services.triage import MAX_PROMPT_BODY_CHARS, triage_email
+
+    head = "Reply by Friday. Your pickup code is 1234."
+    body = head + " filler" * 2000 + " TAIL-MARKER"
+    assert len(body) > MAX_PROMPT_BODY_CHARS
+
+    call_json = AsyncMock(
+        side_effect=[
+            (
+                TriageResponse(
+                    category="action_required",
+                    summary="Reply by Friday and collect a package.",
+                    has_deadline=True,
+                    has_action_items=True,
+                    is_pickup_code=True,
+                ),
+                Decimal("0.01"),
+            ),
+            (DeadlineResponse(deadline="2026-05-15"), Decimal("0.01")),
+            (ActionItemsResponse(action_items=["Reply"]), Decimal("0.01")),
+            (PickupCodeResponse(pickup_code="1234"), Decimal("0.01")),
+        ]
+    )
+
+    with patch("app.services.triage.call_json_with_cost", call_json):
+        await triage_email(_email(body=body), "Daily")
+
+    prompts = {call.kwargs["kind"]: call.kwargs["user"] for call in call_json.await_args_list}
+    assert set(prompts) == {"triage", "deadline", "action_items", "pickup"}
+    for kind, prompt in prompts.items():
+        assert head in prompt, kind
+        assert "TAIL-MARKER" not in prompt, kind
+        assert len(prompt) < MAX_PROMPT_BODY_CHARS + 200, kind

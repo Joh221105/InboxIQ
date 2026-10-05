@@ -70,12 +70,16 @@ and stops a batch once it has spent $0.50.
 - **Extraction:** when the classifier flags them, deadline, action-item and
   pickup-code extraction run concurrently. A regex prefilter also catches
   pickup codes the classifier misses.
+- **Prompt size:** every prompt, classification and extraction alike, sees at
+  most the first 4,000 characters of an email body.
 - **Providers:** OpenRouter (free tier) first, with Anthropic Claude Haiku as
   the fallback (`app/services/ai_client.py`). Transient provider errors are
   retried with backoff.
 - **Validation:** every response is parsed as JSON and validated against a
-  Pydantic model. Malformed JSON gets one more attempt. Emails that fail three
-  times show "(AI unavailable)" and are no longer retried.
+  Pydantic model. A response that is malformed or fails validation gets one
+  more attempt, which goes to the fallback provider when one is configured.
+  Emails that fail three times show "(AI unavailable)" and are no longer
+  retried.
 - **Cost tracking:** every call is recorded in `ai_usage`.
 - Mail from a tagged contact is never auto-archived.
 

@@ -1,9 +1,9 @@
 """LLM access for JSON-producing prompts.
 
 OpenRouter (free tier) is tried first, with Anthropic Claude Haiku as the
-fallback. Every response is parsed as JSON and validated against a Pydantic
-model before use, and every call is recorded in ``ai_usage`` for cost
-tracking.
+fallback, both when OpenRouter is unavailable and when its answer cannot be
+used. Every response is parsed as JSON and validated against a Pydantic model
+before use, and every call is recorded in ``ai_usage`` for cost tracking.
 """
 
 from __future__ import annotations
@@ -58,7 +58,8 @@ class Completion:
     cost_usd: Decimal
 
 
-# Free models occasionally wrap or truncate JSON; one retry recovers most of those.
+# Free models occasionally wrap, truncate or mis-shape JSON; one more attempt
+# recovers most of those. It goes to the fallback provider when there is one.
 _JSON_ATTEMPTS = 2
 
 
@@ -166,9 +167,13 @@ async def _completion_anthropic(system: str, user: str) -> tuple[str, int, int]:
     return content, resp.usage.input_tokens, resp.usage.output_tokens
 
 
-async def _completion(system: str, user: str) -> Completion:
-    """Try OpenRouter first, then fall back to Anthropic."""
-    if settings.openrouter_api_key:
+async def _completion(system: str, user: str, *, skip_primary: bool = False) -> Completion:
+    """Try OpenRouter first, then fall back to Anthropic.
+
+    ``skip_primary`` goes straight to the fallback, for a second attempt after
+    the primary answered with output that could not be used.
+    """
+    if settings.openrouter_api_key and not skip_primary:
         try:
             content, pt, ct = await _completion_openrouter(system, user)
             return Completion(content, OPENROUTER_MODEL, pt, ct, Decimal(0))
@@ -220,25 +225,32 @@ async def call_json_with_cost(
     email_id: UUID | None = None,
 ) -> tuple[T, Decimal]:
     total_cost = Decimal(0)
-    raw = ""
+    skip_primary = False
+    failure = AIInvalidResponse("model did not return a usable response")
     for _attempt in range(_JSON_ATTEMPTS):
-        completion = await _completion(system, user)
+        completion = await _completion(system, user, skip_primary=skip_primary)
         total_cost += completion.cost_usd
         await _record_usage(completion, kind=kind, user_id=user_id, email_id=email_id)
-        raw = completion.content
         try:
-            data = json.loads(_extract_json(raw))
-            break
-        except json.JSONDecodeError:
-            continue
-    else:
+            return _parse(completion.content, response_model, kind=kind), total_cost
+        except AIInvalidResponse as exc:
+            failure = exc
+            # Asking the same free model again rarely helps, so the next
+            # attempt goes to the fallback when one is configured.
+            skip_primary = completion.model == OPENROUTER_MODEL and bool(settings.anthropic_api_key)
+    raise failure
+
+
+def _parse(raw: str, response_model: type[T], *, kind: str) -> T:
+    try:
+        data = json.loads(_extract_json(raw))
+    except json.JSONDecodeError as exc:
         # Log a short sample only: responses can contain email content.
         logger.warning("ai returned invalid json kind=%s sample=%r", kind, raw[:200])
-        raise AIInvalidResponse("model did not return valid JSON")
+        raise AIInvalidResponse("model did not return valid JSON") from exc
 
     try:
-        parsed = response_model.model_validate(data)
+        return response_model.model_validate(data)
     except ValidationError as exc:
         logger.warning("ai response failed validation kind=%s err=%s", kind, exc)
         raise AIInvalidResponse(str(exc)) from exc
-    return parsed, total_cost
