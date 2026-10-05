@@ -1,34 +1,34 @@
-# backend/app/services/gmail_oauth.py
 from __future__ import annotations
 
 import asyncio
+import logging
 import urllib.parse
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
-
-import logging
 
 import httpx
 import jwt
 from pydantic import BaseModel, ValidationError
 
-logger = logging.getLogger(__name__)
-
 from app.core.config import settings
 from app.db.connected_accounts import get_account, update_oauth_token
 from app.models.connected_account import OAuthTokens
+
+logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GMAIL_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+_GOOGLE_TIMEOUT = 10.0  # seconds
 
 _refresh_locks: dict[UUID, asyncio.Lock] = {}
 
 
 # --- Exceptions ---
+
 
 class StateInvalid(Exception):
     pass
@@ -50,6 +50,7 @@ class RefreshFailed(Exception):
 
 # --- State claim model ---
 
+
 class StateClaims(BaseModel):
     user_id: UUID
     return_to: str
@@ -58,11 +59,12 @@ class StateClaims(BaseModel):
 
 # --- State signing ---
 
+
 def sign_state(claims: dict) -> str:
     payload = {
         **claims,
         "nonce": uuid.uuid4().hex,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "exp": datetime.now(UTC) + timedelta(minutes=10),
     }
     return jwt.encode(payload, settings.oauth_state_secret, algorithm="HS256")
 
@@ -77,9 +79,9 @@ def verify_state(token: str) -> StateClaims:
         )
         return StateClaims(**payload)
     except jwt.ExpiredSignatureError:
-        raise StateExpired()
+        raise StateExpired() from None
     except (jwt.PyJWTError, ValidationError):
-        raise StateInvalid()
+        raise StateInvalid() from None
 
 
 def build_authorize_url(user_id: UUID, return_to: str) -> str:
@@ -96,29 +98,37 @@ def build_authorize_url(user_id: UUID, return_to: str) -> str:
     return f"{GOOGLE_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
+def is_safe_return_path(path: str) -> bool:
+    """True only for same-origin absolute paths such as ``/settings``.
+
+    Rejects scheme-relative (``//host``) and backslash (``/\\host``) forms that
+    browsers treat as another origin.
+    """
+    return path.startswith("/") and not path.startswith(("//", "/\\"))
+
+
 async def exchange_code(code: str) -> OAuthTokens:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "client_id": settings.gmail_client_id,
-                "client_secret": settings.gmail_client_secret,
-                "redirect_uri": settings.gmail_redirect_uri,
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=_GOOGLE_TIMEOUT) as client:
+            resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "client_id": settings.gmail_client_id,
+                    "client_secret": settings.gmail_client_secret,
+                    "redirect_uri": settings.gmail_redirect_uri,
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise OAuthExchangeFailed(f"token request failed: {exc}") from exc
     if resp.status_code != 200:
         try:
             _error_key = resp.json().get("error", "unknown")
         except Exception:
             _error_key = "unparseable"
         logger.error(
-            "google token exchange failed: status=%s error=%s redirect_uri=%s client_id=%s",
-            resp.status_code,
-            _error_key,
-            settings.gmail_redirect_uri,
-            settings.gmail_client_id,
+            "google token exchange failed: status=%s error=%s", resp.status_code, _error_key
         )
         raise OAuthExchangeFailed(_error_key)
     data = resp.json()
@@ -126,7 +136,7 @@ async def exchange_code(code: str) -> OAuthTokens:
         return OAuthTokens(
             access_token=data["access_token"],
             refresh_token=data["refresh_token"],
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+            expires_at=datetime.now(UTC) + timedelta(seconds=data["expires_in"]),
             scope=data.get("scope", ""),
         )
     except (KeyError, TypeError) as exc:
@@ -134,11 +144,14 @@ async def exchange_code(code: str) -> OAuthTokens:
 
 
 async def get_gmail_address(access_token: str) -> str:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            GMAIL_PROFILE_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=_GOOGLE_TIMEOUT) as client:
+            resp = await client.get(
+                GMAIL_PROFILE_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.HTTPError as exc:
+        raise OAuthExchangeFailed(f"Gmail profile request failed: {exc}") from exc
     if resp.status_code != 200:
         raise OAuthExchangeFailed(f"Gmail profile fetch failed: {resp.status_code}")
     try:
@@ -152,7 +165,7 @@ async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
         _refresh_locks[account_id] = asyncio.Lock()
     async with _refresh_locks[account_id]:
         account = await get_account(account_id)
-        if account.oauth_token.expires_at > datetime.now(timezone.utc) + timedelta(seconds=60):
+        if account.oauth_token.expires_at > datetime.now(UTC) + timedelta(seconds=60):
             return account.oauth_token
 
         async with httpx.AsyncClient() as client:
@@ -181,7 +194,7 @@ async def refresh_tokens(account_id: UUID, refresh_token: str) -> OAuthTokens:
             new_tokens = OAuthTokens(
                 access_token=data["access_token"],
                 refresh_token=refresh_token,
-                expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
+                expires_at=datetime.now(UTC) + timedelta(seconds=data["expires_in"]),
                 scope=data.get("scope", ""),
             )
         except (KeyError, TypeError) as exc:

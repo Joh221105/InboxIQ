@@ -26,6 +26,6 @@ dist/
 !.env.example
 !**/.env.example
 
-# Project-specific
-InboxIQ_Build_Prompts.md
+# Local planning notes and agent scratch space (never published)
 docs/superpowers/
+.superpowers/

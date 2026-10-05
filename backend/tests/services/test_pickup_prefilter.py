@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -17,9 +17,9 @@ def _email(text: str) -> Email:
         gmail_id=uuid4().hex,
         subject=text,
         sender="sender@example.com",
-        received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 13, tzinfo=UTC),
         body_text=text,
-        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
 
 

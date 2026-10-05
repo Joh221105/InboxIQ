@@ -1,18 +1,21 @@
-# backend/app/db/emails.py
 from __future__ import annotations
 
 import asyncio
 import base64
+import json
+import logging
 import re
-from datetime import date, datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
-import logging
+from postgrest.types import CountMethod
 
+from app.core.clock import utc_now, utc_today
+from app.core.errors import BadRequestError
 from app.db.supabase import get_service_client
-
-_log = logging.getLogger(__name__)
+from app.models.ai import Digest, StoredDigest, TriageResult
 from app.models.email import (
     ContactTagInfo,
     Email,
@@ -22,11 +25,14 @@ from app.models.email import (
     EmailUpdate,
     ParsedEmail,
     PickupCodeRow,
+    TriageCategory,
 )
-from app.models.ai import Digest, StoredDigest
-from app.services.triage import TriageResult
+
+_log = logging.getLogger(__name__)
 
 _COUNTS_CACHE_TTL = timedelta(seconds=30)
+_MAX_AI_ATTEMPTS = 3
+_TRIAGE_RANKS = range(1, 4)  # emails.triage_rank values (migration 022)
 _counts_cache: dict[UUID, tuple[datetime, EmailCounts]] = {}
 
 _EMAIL_SELECT = "*, connected_accounts(color,email_address), contact_tags!contact_tag_id(tag,custom_label,color)"
@@ -41,15 +47,46 @@ def _sanitize_fts_input(value: str | None) -> str | None:
     return collapsed or None
 
 
-def _cursor_encode(received_at: datetime, email_id: UUID) -> str:
-    raw = f"{received_at.isoformat()}|{email_id}"
-    return base64.urlsafe_b64encode(raw.encode()).decode()
+@dataclass(frozen=True)
+class _Cursor:
+    rank: int
+    received_at: str
+    email_id: str
 
 
-def _cursor_decode(cursor: str) -> tuple[str, str]:
-    raw = base64.urlsafe_b64decode(cursor.encode()).decode()
-    rt, eid = raw.split("|", 1)
-    return rt, eid
+def _encode_cursor(row: dict[str, Any]) -> str:
+    payload = {"r": row["triage_rank"], "t": row["received_at"], "i": row["id"]}
+    return base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> _Cursor:
+    """Parse a client-supplied cursor strictly; its values end up in a PostgREST filter."""
+    try:
+        data = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        rank, received_at, email_id = data["r"], data["t"], data["i"]
+        if not isinstance(rank, int) or rank not in _TRIAGE_RANKS:
+            raise ValueError("cursor rank out of range")
+        if not isinstance(received_at, str) or not isinstance(email_id, str):
+            raise TypeError("cursor fields must be strings")
+        return _Cursor(
+            rank=rank,
+            received_at=datetime.fromisoformat(received_at).isoformat(),
+            email_id=str(UUID(email_id)),
+        )
+    except (ValueError, KeyError, TypeError) as exc:  # binascii/JSON errors are ValueErrors
+        raise BadRequestError("Invalid pagination cursor.", code="invalid_cursor") from exc
+
+
+def _keyset_filter(cursor: _Cursor) -> str:
+    """PostgREST ``or`` filter for rows strictly after *cursor* in
+    (triage_rank ASC, received_at DESC, id DESC) order. Timestamps are quoted
+    because they contain PostgREST-reserved characters."""
+    r, t, i = cursor.rank, cursor.received_at, cursor.email_id
+    return (
+        f"triage_rank.gt.{r},"
+        f'and(triage_rank.eq.{r},received_at.lt."{t}"),'
+        f'and(triage_rank.eq.{r},received_at.eq."{t}",id.lt.{i})'
+    )
 
 
 def _build_contact_tag(row_tag: dict | None) -> ContactTagInfo | None:
@@ -60,6 +97,7 @@ def _build_contact_tag(row_tag: dict | None) -> ContactTagInfo | None:
 
 
 def _row_to_email(row: dict[str, Any]) -> Email:
+    row = dict(row)
     nested = row.pop("connected_accounts", None) or {}
     account_color = nested.get("color") if isinstance(nested, dict) else None
     account_email = nested.get("email_address") if isinstance(nested, dict) else None
@@ -103,20 +141,24 @@ async def upsert_email(
     contact_tag_id: UUID | None = None,
 ) -> Literal["inserted", "updated"]:
     def _do() -> Literal["inserted", "updated"]:
-        result = get_service_client().rpc(
-            "upsert_email_record",
-            {
-                "p_account_id": str(account_id),
-                "p_user_id": str(user_id),
-                "p_gmail_id": parsed.external_id,
-                "p_subject": parsed.subject,
-                "p_sender": parsed.sender_email,
-                "p_sender_name": parsed.sender_name,
-                "p_body_text": parsed.body_preview,
-                "p_contact_tag_id": str(contact_tag_id) if contact_tag_id else None,
-                "p_received_at": parsed.received_at.isoformat(),
-            },
-        ).execute()
+        result = (
+            get_service_client()
+            .rpc(
+                "upsert_email_record",
+                {
+                    "p_account_id": str(account_id),
+                    "p_user_id": str(user_id),
+                    "p_gmail_id": parsed.external_id,
+                    "p_subject": parsed.subject,
+                    "p_sender": parsed.sender_email,
+                    "p_sender_name": parsed.sender_name,
+                    "p_body_text": parsed.body_preview,
+                    "p_contact_tag_id": str(contact_tag_id) if contact_tag_id else None,
+                    "p_received_at": parsed.received_at.isoformat(),
+                },
+            )
+            .execute()
+        )
         if result.data not in ("inserted", "updated"):
             raise RuntimeError(f"Unexpected upsert result: {result.data!r}")
         return result.data
@@ -125,7 +167,17 @@ async def upsert_email(
 
 
 async def list_emails(filters: EmailFilters) -> EmailListPage:
-    limit = min(filters.limit, 100)
+    """One page of the inbox.
+
+    The default order is triage priority then recency, paginated with a
+    keyset cursor; ``deadline_asc`` returns a single, unpaginated page.
+    """
+    paginated = filters.order == "received_desc"
+    if filters.cursor and not paginated:
+        raise BadRequestError(
+            "Cursors are only supported for received_desc order.", code="invalid_cursor"
+        )
+    cursor = _decode_cursor(filters.cursor) if filters.cursor else None
 
     def _fetch() -> list[dict[str, Any]]:
         q = (
@@ -165,48 +217,26 @@ async def list_emails(filters: EmailFilters) -> EmailListPage:
         if filters.deadline_before:
             q = q.lte("deadline_extracted", filters.deadline_before.isoformat())
 
-        if filters.cursor:
-            rt, eid = _cursor_decode(filters.cursor)
-            q = q.or_(f"received_at.lt.{rt},and(received_at.eq.{rt},id.lt.{eid})")
-
-        if filters.order == "deadline_asc":
-            q = q.order("deadline_extracted", desc=False, nullsfirst=False).order("received_at", desc=True)
-        elif filters.triage_category:
-            q = q.order("received_at", desc=True).order("id", desc=True)
+        if paginated:
+            if cursor is not None:
+                q = q.or_(_keyset_filter(cursor))
+            q = (
+                q.order("triage_rank", desc=False)
+                .order("received_at", desc=True)
+                .order("id", desc=True)
+            )
         else:
-            # Supabase/PostgREST cannot express CASE ordering directly here.
-            # Keep the DB order deterministic, then apply the Issue 2 triage priority below.
-            q = q.order("received_at", desc=True).order("id", desc=True)
-        q = q.limit(limit + 1)
+            q = q.order("deadline_extracted", desc=False, nullsfirst=False).order(
+                "received_at", desc=True
+            )
+        q = q.limit(filters.limit + 1)
         return q.execute().data or []
 
     rows = await asyncio.to_thread(_fetch)
-    if not filters.triage_category and filters.order == "received_desc":
-        priority = {
-            "action_required": 1,
-            "worth_reading": 2,
-            "auto_archive": 3,
-        }
-        rows.sort(
-            key=lambda row: (
-                priority.get(str(row.get("ai_category") or row.get("triage_category") or ""), 4),
-                -(datetime.fromisoformat(row["received_at"].replace("Z", "+00:00")).timestamp()
-                  if row.get("received_at") else 0),
-                str(row.get("id", "")),
-            )
-        )
-
-    has_more = len(rows) > limit
-    page_rows = rows[:limit]
-    items = [_row_to_email(r) for r in page_rows]
-
-    next_cursor = None
-    if has_more and items:
-        last = items[-1]
-        if last.received_at:
-            next_cursor = _cursor_encode(last.received_at, last.id)
-
-    return EmailListPage(items=items, next_cursor=next_cursor)
+    page = rows[: filters.limit]
+    has_more = paginated and len(rows) > filters.limit
+    next_cursor = _encode_cursor(page[-1]) if has_more else None
+    return EmailListPage(items=[_row_to_email(r) for r in page], next_cursor=next_cursor)
 
 
 async def get_email(email_id: UUID, user_id: UUID) -> Email | None:
@@ -220,7 +250,7 @@ async def get_email(email_id: UUID, user_id: UUID) -> Email | None:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result is not None else None  # maybe_single(): None when no row
 
     row = await asyncio.to_thread(_fetch)
     if not row:
@@ -238,7 +268,7 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
         changes["is_archived"] = patch.is_archived
     if patch.pickup_used is not None:
         changes["pickup_used"] = patch.pickup_used
-        changes["pickup_used_at"] = datetime.now(timezone.utc).isoformat() if patch.pickup_used else None
+        changes["pickup_used_at"] = utc_now().isoformat() if patch.pickup_used else None
         if patch.pickup_used:
             changes["is_archived"] = True
     if patch.is_read is not None:
@@ -246,22 +276,20 @@ async def update_email(email_id: UUID, user_id: UUID, patch: EmailUpdate) -> Ema
     if not changes:
         return existing
 
-    def _update() -> dict[str, Any] | None:
-        result = (
+    def _update() -> None:
+        (
             get_service_client()
             .table("emails")
             .update(changes)
             .eq("id", str(email_id))
             .eq("user_id", str(user_id))
-            .select(_EMAIL_SELECT)
-            .maybe_single()
             .execute()
         )
-        return result.data
 
-    row = await asyncio.to_thread(_update)
+    await asyncio.to_thread(_update)
     _clear_counts_cache(user_id)
-    return _row_to_email(row) if row else None
+    # Re-read so the response includes the joined account and contact-tag fields.
+    return await get_email(email_id, user_id)
 
 
 async def list_pickup_codes(
@@ -269,7 +297,7 @@ async def list_pickup_codes(
     used: bool,
     include_expired: bool = False,
 ) -> list[PickupCodeRow]:
-    today = date.today().isoformat()
+    today = utc_today().isoformat()
 
     def _fetch() -> list[dict[str, Any]]:
         q = (
@@ -286,7 +314,9 @@ async def list_pickup_codes(
         )
         if not include_expired:
             q = q.or_(f"pickup_expiry.is.null,pickup_expiry.gte.{today}")
-        return q.order("pickup_code", desc=False).order("received_at", desc=True).execute().data or []
+        return (
+            q.order("pickup_code", desc=False).order("received_at", desc=True).execute().data or []
+        )
 
     rows = await asyncio.to_thread(_fetch)
     deduped: list[PickupCodeRow] = []
@@ -305,28 +335,33 @@ async def list_pickup_codes(
 
 
 async def get_email_counts(user_id: UUID) -> EmailCounts:
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     cached = _counts_cache.get(user_id)
     if cached and now - cached[0] < _COUNTS_CACHE_TTL:
         return cached[1]
 
-    def _fetch() -> list[dict[str, Any]]:
-        result = (
+    def _count(category: TriageCategory | None) -> int:
+        q = (
             get_service_client()
             .table("emails")
-            .select("ai_category")
+            # head=True would skip the body, but postgrest 0.17 then reports count=0;
+            # fetch one row instead and read the total from Content-Range.
+            .select("id", count=CountMethod.exact)
             .eq("user_id", str(user_id))
             .eq("is_archived", False)
-            .execute()
         )
-        return result.data or []
+        if category is not None:
+            q = q.eq("ai_category", category)
+        return q.limit(1).execute().count or 0
 
-    rows = await asyncio.to_thread(_fetch)
+    total, action, worth, archive = await asyncio.gather(
+        *(
+            asyncio.to_thread(_count, category)
+            for category in (None, "action_required", "worth_reading", "auto_archive")
+        )
+    )
     counts = EmailCounts(
-        all=len(rows),
-        action_required=sum(1 for row in rows if row.get("ai_category") == "action_required"),
-        worth_reading=sum(1 for row in rows if row.get("ai_category") == "worth_reading"),
-        auto_archive=sum(1 for row in rows if row.get("ai_category") == "auto_archive"),
+        all=total, action_required=action, worth_reading=worth, auto_archive=archive
     )
     _counts_cache[user_id] = (now, counts)
     return counts
@@ -345,7 +380,7 @@ async def apply_triage_result(email_id: UUID, result: TriageResult) -> None:
         "retailer": result.retailer,
         "locker_location": result.locker_location,
         "ai_processed": True,
-        "last_ai_attempt_at": datetime.now(timezone.utc).isoformat(),
+        "last_ai_attempt_at": utc_now().isoformat(),
     }
 
     def _update() -> None:
@@ -356,35 +391,30 @@ async def apply_triage_result(email_id: UUID, result: TriageResult) -> None:
 
 
 async def mark_ai_failed(email_id: UUID) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    """Record a failed AI attempt; after the third, show a placeholder summary.
+
+    The email stays unprocessed so the worker retries it until the attempt cap
+    in `list_unprocessed_emails` stops picking it up.
+    """
 
     def _update() -> int:
-        result = (
-            get_service_client()
-            .table("emails")
-            .update({"last_ai_attempt_at": now})
-            .eq("id", str(email_id))
-            .select("ai_attempts")
-            .maybe_single()
-            .execute()
+        client = get_service_client()
+        client.rpc("increment_ai_attempts", {"p_email_id": str(email_id)}).execute()
+        row = (
+            client.table("emails").select("ai_attempts").eq("id", str(email_id)).single().execute()
         )
-        current = (result.data or {}).get("ai_attempts") or 0
-        attempts = int(current) + 1
-        changes: dict[str, Any] = {
-            "ai_attempts": attempts,
-            "last_ai_attempt_at": now,
-            "ai_processed": False,  # always reset so worker can retry
-        }
-        if attempts >= 3:
+        attempts = int((row.data or {}).get("ai_attempts") or 0)
+        changes: dict[str, Any] = {"ai_processed": False}
+        if attempts >= _MAX_AI_ATTEMPTS:
             changes["ai_summary"] = "(AI unavailable)"
-        get_service_client().table("emails").update(changes).eq("id", str(email_id)).execute()
+        client.table("emails").update(changes).eq("id", str(email_id)).execute()
         return attempts
 
     return await asyncio.to_thread(_update)
 
 
 async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    cutoff = utc_now() - timedelta(seconds=60)
 
     def _fetch() -> list[dict[str, Any]]:
         result = (
@@ -392,7 +422,7 @@ async def list_unprocessed_emails(limit: int = 10) -> list[Email]:
             .table("emails")
             .select(_EMAIL_SELECT)
             .eq("ai_processed", False)
-            .lt("ai_attempts", 3)  # don't retry permanently-failed emails
+            .lt("ai_attempts", _MAX_AI_ATTEMPTS)  # don't retry permanently-failed emails
             .or_(f"last_ai_attempt_at.is.null,last_ai_attempt_at.lt.{cutoff.isoformat()}")
             .order("received_at", desc=True)
             .limit(limit)
@@ -443,7 +473,7 @@ async def update_email_triage_only(
 
 
 async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Email]:
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    since = utc_now() - timedelta(hours=hours)
 
     def _fetch() -> list[dict[str, Any]]:
         result = (
@@ -463,7 +493,7 @@ async def list_action_required_recent(user_id: UUID, hours: int = 24) -> list[Em
 
 
 async def list_upcoming_deadlines(user_id: UUID, days: int = 7) -> list[Email]:
-    today = date.today()
+    today = utc_today()
     end = today + timedelta(days=days)
 
     def _fetch() -> list[dict[str, Any]]:
@@ -495,7 +525,7 @@ async def get_digest(user_id: UUID, digest_date: date) -> StoredDigest | None:
                 .maybe_single()
                 .execute()
             )
-            return result.data
+            return result.data if result is not None else None
         except Exception as exc:
             _log.warning("get_digest query failed (treating as cache miss): %s", exc)
             return None
@@ -513,7 +543,7 @@ async def upsert_digest(user_id: UUID, digest_date: date, digest: Digest) -> Non
         "digest_date": digest_date.isoformat(),
         "payload": digest.model_dump(mode="json"),
         "degraded": digest.degraded,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": utc_now().isoformat(),
     }
 
     def _upsert() -> None:

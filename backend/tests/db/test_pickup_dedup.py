@@ -19,26 +19,31 @@ class _PickupQuery:
         self.gte_filters: list[tuple[str, object]] = []
         self.orders: list[tuple[str, bool]] = []
 
-    def select(self, *_args: object) -> "_PickupQuery":
+    def select(self, *_args: object) -> _PickupQuery:
         return self
 
-    def eq(self, column: str, value: object) -> "_PickupQuery":
+    def eq(self, column: str, value: object) -> _PickupQuery:
         self.eq_filters.append((column, value))
         return self
 
-    def gte(self, column: str, value: object) -> "_PickupQuery":
+    def gte(self, column: str, value: object) -> _PickupQuery:
         self.gte_filters.append((column, value))
         return self
 
-    def or_(self, expression: str) -> "_PickupQuery":
+    def filter(self, column: str, operator: str, value: object) -> _PickupQuery:
+        if (column, operator, value) == ("pickup_code", "not.is", "null"):
+            self.rows = [row for row in self.rows if row.get("pickup_code") is not None]
+        return self
+
+    def or_(self, expression: str) -> _PickupQuery:
         if "pickup_expiry.gte." in expression:
             self.gte_filters.append(("pickup_expiry", expression.rsplit(".", 1)[-1]))
         return self
 
-    def not_(self, *_args: object) -> "_PickupQuery":
+    def not_(self, *_args: object) -> _PickupQuery:
         return self
 
-    def order(self, column: str, desc: bool = False) -> "_PickupQuery":
+    def order(self, column: str, desc: bool = False) -> _PickupQuery:
         self.orders.append((column, desc))
         return self
 

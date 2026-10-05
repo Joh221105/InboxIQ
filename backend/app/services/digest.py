@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from uuid import UUID
 
+from app.core.clock import utc_now, utc_today
 from app.db.emails import (
     get_digest,
     list_action_required_recent,
@@ -13,7 +14,7 @@ from app.db.users import get_user
 from app.models.ai import Digest, DigestItem, DigestResponse
 from app.models.email import Email
 from app.prompts.digest import DIGEST_PROMPT
-from app.services.openai_client import AIInvalidResponse, AIServiceUnavailable, call_json
+from app.services.ai_client import AIInvalidResponse, AIServiceUnavailable, call_json
 
 
 def _deadline_value(email: Email) -> str:
@@ -25,9 +26,7 @@ def _digest_item_from_email(email: Email) -> DigestItem:
     return DigestItem(
         summary=summary,
         source_email_id=email.id,
-        deadline=date.fromisoformat(email.deadline_extracted)
-        if email.deadline_extracted
-        else None,
+        deadline=date.fromisoformat(email.deadline_extracted) if email.deadline_extracted else None,
         sender=email.sender or "",
     )
 
@@ -73,9 +72,9 @@ async def generate_daily_digest(user_id: UUID) -> Digest:
 
 
 async def get_or_create_today_digest(user_id: UUID) -> Digest:
-    today = date.today()
+    today = utc_today()
     cached = await get_digest(user_id, today)
-    if cached and (datetime.now(timezone.utc) - cached.generated_at).total_seconds() < 3600:
+    if cached and (utc_now() - cached.generated_at).total_seconds() < 3600:
         user = await get_user(user_id)
         return cached.payload.model_copy(
             update={"generated_at": cached.generated_at, "context": user.default_context}

@@ -4,8 +4,8 @@ import { Plus } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
-import { AddContactDialog } from "@/components/contacts/AddContactDialog";
-import { TagSection } from "@/components/contacts/TagSection";
+import { AddContactDialog } from "@/components/contacts/add-contact-dialog";
+import { TagSection } from "@/components/contacts/tag-section";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContactEmailHistory, useContacts } from "@/lib/queries/contacts";

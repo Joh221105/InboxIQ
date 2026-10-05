@@ -3,16 +3,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from dataclasses import dataclass, field
-from datetime import date
+from collections.abc import Awaitable
 from decimal import Decimal
-from typing import Any, Awaitable
+from typing import Any
 
-from app.models.ai import ActionItemsResponse, DeadlineResponse, PickupCodeResponse, TriageResponse
+from app.models.ai import (
+    ActionItemsResponse,
+    DeadlineResponse,
+    PickupCodeResponse,
+    TriageResponse,
+    TriageResult,
+)
 from app.models.email import Email
+from app.models.user import ContextMode
 from app.prompts.extract import ACTION_ITEMS_PROMPT, DEADLINE_PROMPT, PICKUP_CODE_PROMPT
 from app.prompts.triage import TRIAGE_PROMPTS
-from app.services.openai_client import call_json_with_cost
+from app.services.ai_client import call_json_with_cost
 
 logger = logging.getLogger(__name__)
 
@@ -28,36 +34,22 @@ PICKUP_PATTERNS = [
 ]
 
 
-def _email_body(email: Email) -> str:
-    return email.body_text or ""
-
-
-def _email_sender(email: Email) -> str:
-    return email.sender or ""
+def triage_message(email: Email) -> str:
+    """User-turn content for triage prompts; email data never enters the system prompt."""
+    return (
+        f"From: {email.sender or ''}\n"
+        f"Subject: {email.subject or ''}\n"
+        f"Body: {(email.body_text or '')[:4000]}"
+    )
 
 
 def pickup_code_prefilter(email: Email) -> bool:
-    text = f"{email.subject or ''} {_email_body(email)[:500]}"
+    text = f"{email.subject or ''} {(email.body_text or '')[:500]}"
     return any(p.search(text) for p in PICKUP_PATTERNS)
 
 
-@dataclass
-class TriageResult:
-    category: str
-    summary: str
-    triage_context: str
-    deadline_extracted: date | None = None
-    action_items: list[str] | None = None
-    is_pickup_code: bool = False
-    pickup_code: str | None = None
-    pickup_expiry: date | None = None
-    retailer: str | None = None
-    locker_location: str | None = None
-    cost_usd: Decimal = field(default_factory=Decimal)
-
-
-async def triage_email(email: Email, user_context: str) -> TriageResult:
-    body = _email_body(email)
+async def triage_email(email: Email, user_context: ContextMode) -> TriageResult:
+    body = email.body_text or ""
     if not body.strip():
         return TriageResult(
             category="auto_archive",
@@ -65,14 +57,9 @@ async def triage_email(email: Email, user_context: str) -> TriageResult:
             triage_context=user_context,
         )
 
-    user_msg = (
-        f"From: {_email_sender(email)}\n"
-        f"Subject: {email.subject or ''}\n"
-        f"Body: {body[:4000]}"
-    )
     triage, triage_cost = await call_json_with_cost(
         system=TRIAGE_PROMPTS[user_context],
-        user=user_msg,
+        user=triage_message(email),
         response_model=TriageResponse,
         kind="triage",
         user_id=email.user_id,
@@ -133,7 +120,7 @@ async def triage_email(email: Email, user_context: str) -> TriageResult:
 
     if tasks:
         outcomes = await asyncio.gather(*(task for _, task in tasks))
-        for (kind, _), outcome in zip(tasks, outcomes):
+        for (kind, _), outcome in zip(tasks, outcomes, strict=True):
             parsed, step_cost = outcome
             result.cost_usd += step_cost
             if kind == "deadline":

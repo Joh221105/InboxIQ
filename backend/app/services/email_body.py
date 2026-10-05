@@ -4,7 +4,7 @@ import asyncio
 import base64
 import re
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from html import escape
 from typing import Any
 from uuid import UUID
@@ -68,7 +68,7 @@ def sanitize_body_html(body_html: str) -> str:
 
 async def fetch_email_body_html(account_id: UUID, gmail_id: str) -> str:
     cache_key = (account_id, gmail_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cached = _body_cache.get(cache_key)
     if cached and now - cached[0] < _BODY_CACHE_TTL:
         _body_cache.move_to_end(cache_key)
@@ -78,12 +78,7 @@ async def fetch_email_body_html(account_id: UUID, gmail_id: str) -> str:
     service = await get_authed_service(account)
 
     def _get() -> dict[str, Any]:
-        return (
-            service.users()
-            .messages()
-            .get(userId="me", id=gmail_id, format="full")
-            .execute()
-        )
+        return service.users().messages().get(userId="me", id=gmail_id, format="full").execute()
 
     msg = await asyncio.to_thread(_get)
     html, plain = _extract_html_and_plain(msg.get("payload", {}))

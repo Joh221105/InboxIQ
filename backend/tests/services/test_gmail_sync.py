@@ -1,8 +1,8 @@
-# backend/tests/services/test_gmail_sync.py
 from __future__ import annotations
 
 import json
 import os
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -18,6 +18,7 @@ def load(name: str) -> dict:
 
 def test_parse_payload_plain_text() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("plain_text.json")
     result = parse_payload(msg["payload"])
     assert result == "Hello plain world"
@@ -25,6 +26,7 @@ def test_parse_payload_plain_text() -> None:
 
 def test_parse_payload_html_only_strips_tags() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("html_only.json")
     result = parse_payload(msg["payload"])
     assert "<p>" not in result
@@ -36,6 +38,7 @@ def test_parse_payload_html_only_strips_tags() -> None:
 
 def test_parse_payload_multipart_alternative_prefers_plain() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("multipart_alternative.json")
     result = parse_payload(msg["payload"])
     assert result == "Hello plain"
@@ -43,6 +46,7 @@ def test_parse_payload_multipart_alternative_prefers_plain() -> None:
 
 def test_parse_payload_multipart_mixed_returns_text_ignores_attachment() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("multipart_mixed.json")
     result = parse_payload(msg["payload"])
     assert result == "Email with attachment"
@@ -50,6 +54,7 @@ def test_parse_payload_multipart_mixed_returns_text_ignores_attachment() -> None
 
 def test_parse_payload_multipart_related_returns_html_text() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("multipart_related.json")
     result = parse_payload(msg["payload"])
     assert "Email with image" in result
@@ -58,6 +63,7 @@ def test_parse_payload_multipart_related_returns_html_text() -> None:
 
 def test_parse_payload_nested_multipart_extracts_html_text() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("nested_multipart.json")
     result = parse_payload(msg["payload"])
     assert "Deeply nested HTML" in result
@@ -66,6 +72,7 @@ def test_parse_payload_nested_multipart_extracts_html_text() -> None:
 
 def test_parse_payload_image_only_returns_empty_string() -> None:
     from app.services.gmail_sync import parse_payload
+
     msg = load("image_only.json")
     result = parse_payload(msg["payload"])
     assert result == ""
@@ -73,7 +80,9 @@ def test_parse_payload_image_only_returns_empty_string() -> None:
 
 def test_parse_payload_truncates_to_2000_chars() -> None:
     import base64
+
     from app.services.gmail_sync import BODY_PREVIEW_MAX_CHARS, parse_payload
+
     long_text = "x" * 5000
     data = base64.urlsafe_b64encode(long_text.encode()).decode()
     payload = {
@@ -117,8 +126,10 @@ def test_no_display_name_returns_none_for_name() -> None:
 
 
 def _make_connected_account(user_id=None, last_synced=None, disconnected_at=None):
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.models.connected_account import ConnectedAccount, OAuthTokens
+
     return ConnectedAccount(
         id=uuid4(),
         user_id=user_id or uuid4(),
@@ -127,26 +138,28 @@ def _make_connected_account(user_id=None, last_synced=None, disconnected_at=None
         oauth_token=OAuthTokens(
             access_token="acc",
             refresh_token="ref",
-            expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
             scope="https://www.googleapis.com/auth/gmail.modify",
         ),
         color="#4F46E5",
         last_synced=last_synced,
         disconnected_at=disconnected_at,
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
 
 
 def _make_parsed_email(external_id: str = "msg1"):
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.models.email import ParsedEmail
+
     return ParsedEmail(
         external_id=external_id,
         sender_email="sender@example.com",
         sender_name="Sender",
         subject="Test",
         body_preview="Body",
-        received_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        received_at=datetime(2025, 6, 1, tzinfo=UTC),
     )
 
 
@@ -159,11 +172,23 @@ async def test_sync_account_inserts_messages() -> None:
 
     with (
         patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
-        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
-        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1"]),
+        patch(
+            "app.services.gmail_sync.get_authed_service",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ),
+        patch(
+            "app.services.gmail_sync.list_message_ids",
+            new_callable=AsyncMock,
+            return_value=["msg1"],
+        ),
         patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, return_value=parsed),
-        patch("app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=None),
-        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"),
+        patch(
+            "app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=None
+        ),
+        patch(
+            "app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"
+        ),
         patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
     ):
         result = await sync_account(account.id)
@@ -184,11 +209,23 @@ async def test_sync_account_applies_matching_contact_tag_to_new_email() -> None:
 
     with (
         patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
-        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
-        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1"]),
+        patch(
+            "app.services.gmail_sync.get_authed_service",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ),
+        patch(
+            "app.services.gmail_sync.list_message_ids",
+            new_callable=AsyncMock,
+            return_value=["msg1"],
+        ),
         patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, return_value=parsed),
-        patch("app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=tag_id) as mock_find,
-        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted") as mock_upsert,
+        patch(
+            "app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=tag_id
+        ) as mock_find,
+        patch(
+            "app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"
+        ) as mock_upsert,
         patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
     ):
         result = await sync_account(account.id)
@@ -200,10 +237,11 @@ async def test_sync_account_applies_matching_contact_tag_to_new_email() -> None:
 
 @pytest.mark.asyncio
 async def test_sync_account_skips_disconnected() -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.services.gmail_sync import sync_account
 
-    account = _make_connected_account(disconnected_at=datetime(2025, 1, 1, tzinfo=timezone.utc))
+    account = _make_connected_account(disconnected_at=datetime(2025, 1, 1, tzinfo=UTC))
 
     with patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account):
         result = await sync_account(account.id)
@@ -220,11 +258,27 @@ async def test_sync_account_skips_404_messages() -> None:
 
     with (
         patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
-        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
-        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1", "msg2"]),
-        patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, side_effect=[None, _make_parsed_email("msg2")]),
-        patch("app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=None),
-        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"),
+        patch(
+            "app.services.gmail_sync.get_authed_service",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ),
+        patch(
+            "app.services.gmail_sync.list_message_ids",
+            new_callable=AsyncMock,
+            return_value=["msg1", "msg2"],
+        ),
+        patch(
+            "app.services.gmail_sync.fetch_message",
+            new_callable=AsyncMock,
+            side_effect=[None, _make_parsed_email("msg2")],
+        ),
+        patch(
+            "app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=None
+        ),
+        patch(
+            "app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="inserted"
+        ),
         patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
     ):
         result = await sync_account(account.id)
@@ -235,15 +289,18 @@ async def test_sync_account_skips_404_messages() -> None:
 
 @pytest.mark.asyncio
 async def test_sync_account_invalid_grant_marks_disconnected() -> None:
-    from app.services.gmail_sync import sync_account
     from app.services.gmail_oauth import RefreshFailed
+    from app.services.gmail_sync import sync_account
 
     account = _make_connected_account()
 
     with (
         patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
-        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock,
-              side_effect=RefreshFailed(is_invalid_grant=True)),
+        patch(
+            "app.services.gmail_sync.get_authed_service",
+            new_callable=AsyncMock,
+            side_effect=RefreshFailed(is_invalid_grant=True),
+        ),
         patch("app.services.gmail_sync.mark_disconnected", new_callable=AsyncMock) as mock_mark,
     ):
         result = await sync_account(account.id)
@@ -261,11 +318,23 @@ async def test_sync_account_idempotent_second_run_produces_zero_inserts() -> Non
 
     with (
         patch("app.services.gmail_sync.get_account", new_callable=AsyncMock, return_value=account),
-        patch("app.services.gmail_sync.get_authed_service", new_callable=AsyncMock, return_value=MagicMock()),
-        patch("app.services.gmail_sync.list_message_ids", new_callable=AsyncMock, return_value=["msg1"]),
+        patch(
+            "app.services.gmail_sync.get_authed_service",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ),
+        patch(
+            "app.services.gmail_sync.list_message_ids",
+            new_callable=AsyncMock,
+            return_value=["msg1"],
+        ),
         patch("app.services.gmail_sync.fetch_message", new_callable=AsyncMock, return_value=parsed),
-        patch("app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=None),
-        patch("app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="updated"),
+        patch(
+            "app.services.gmail_sync.find_contact_tag", new_callable=AsyncMock, return_value=None
+        ),
+        patch(
+            "app.services.gmail_sync.upsert_email", new_callable=AsyncMock, return_value="updated"
+        ),
         patch("app.services.gmail_sync.update_last_synced", new_callable=AsyncMock),
     ):
         result = await sync_account(account.id)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -20,7 +20,7 @@ def _override_auth() -> UserClaims:
 
 def _make_digest(**kwargs) -> Digest:
     defaults: dict = dict(
-        generated_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        generated_at=datetime(2025, 6, 1, tzinfo=UTC),
         items=[
             DigestItem(
                 summary="Pick up your package at locker A3",

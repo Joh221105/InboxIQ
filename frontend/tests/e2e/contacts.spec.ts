@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { api, mockConnectedAccount } from "./fixtures";
+
 test.use({ storageState: "tests/e2e/storage-state.json" });
 
 type ContactTag = {
@@ -23,7 +25,9 @@ function grouped(tags: ContactTag[]) {
 test("contact tags persist after refresh and domain tags highlight inbox emails", async ({ page }) => {
   let tags: ContactTag[] = [];
 
-  await page.route(/.*\/contacts$/, async (route) => {
+  await mockConnectedAccount(page);
+
+  await page.route(api("/contacts"), async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: grouped(tags) });
       return;
@@ -106,5 +110,5 @@ test("contact tags persist after refresh and domain tags highlight inbox emails"
 
   await page.goto("/inbox");
   await expect(page.getByText("dean@uw.edu")).toBeVisible();
-  await expect(page.getByText("Professor")).toBeVisible();
+  await expect(page.getByText("Professor", { exact: true })).toBeVisible();
 });

@@ -6,6 +6,7 @@ Usage (from backend/):
     python scripts/seed_demo.py --user-id <uuid>
     python scripts/seed_demo.py --clear   # remove all seed emails first
 """
+
 from __future__ import annotations
 
 import argparse
@@ -15,9 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.config import settings  # noqa: E402
-from app.db.seed import seed_demo_emails  # noqa: E402
-from supabase import create_client  # noqa: E402
+from app.core.config import settings
+from app.demo.seed import seed_demo_emails
+from supabase import create_client
 
 
 def get_account_id(client, user_id: str) -> str:
@@ -39,11 +40,7 @@ def get_account_id(client, user_id: str) -> str:
 
 def clear_demo_emails(client, user_id: str) -> None:
     result = (
-        client.table("emails")
-        .delete()
-        .eq("user_id", user_id)
-        .like("gmail_id", "demo_%")
-        .execute()
+        client.table("emails").delete().eq("user_id", user_id).like("gmail_id", "demo_%").execute()
     )
     count = len(result.data) if result.data else 0
     print(f"Cleared {count} existing demo emails.")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -8,7 +8,7 @@ import pytest
 
 from app.models.email import Email
 from app.models.user import User
-from app.services.openai_client import AIServiceUnavailable
+from app.services.ai_client import AIServiceUnavailable
 
 
 def _email(subject: str, deadline: str | None = None) -> Email:
@@ -20,8 +20,8 @@ def _email(subject: str, deadline: str | None = None) -> Email:
         subject=subject,
         sender="sender@example.com",
         deadline_extracted=deadline,
-        received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
-        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 13, tzinfo=UTC),
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
 
 
@@ -30,7 +30,7 @@ def _user(user_id=None) -> User:
         id=user_id or uuid4(),
         email="user@example.com",
         default_context="Daily",
-        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
 
 
@@ -49,7 +49,10 @@ async def test_generate_daily_digest_returns_ai_items_when_successful() -> None:
 
     with (
         patch("app.services.digest.get_user", new=AsyncMock(return_value=_user())),
-        patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[action_email])),
+        patch(
+            "app.services.digest.list_action_required_recent",
+            new=AsyncMock(return_value=[action_email]),
+        ),
         patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[])),
         patch("app.services.digest.call_json", new=AsyncMock(return_value=response)),
     ):
@@ -86,8 +89,13 @@ async def test_digest_degraded_fallback_includes_upcoming_deadlines() -> None:
     with (
         patch("app.services.digest.get_user", new=AsyncMock(return_value=_user())),
         patch("app.services.digest.list_action_required_recent", new=AsyncMock(return_value=[])),
-        patch("app.services.digest.list_upcoming_deadlines", new=AsyncMock(return_value=[deadline_email])),
-        patch("app.services.digest.call_json", new=AsyncMock(side_effect=AIServiceUnavailable("down"))),
+        patch(
+            "app.services.digest.list_upcoming_deadlines",
+            new=AsyncMock(return_value=[deadline_email]),
+        ),
+        patch(
+            "app.services.digest.call_json", new=AsyncMock(side_effect=AIServiceUnavailable("down"))
+        ),
     ):
         digest = await generate_daily_digest(uuid4())
 

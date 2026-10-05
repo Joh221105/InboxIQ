@@ -6,8 +6,9 @@ from uuid import UUID
 
 import httpx
 import jwt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKSet
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -24,9 +25,7 @@ class UserClaims(BaseModel):
 
 
 def _invalid(msg: str = "Invalid token") -> HTTPException:
-    return HTTPException(
-        status_code=401, detail={"code": "auth_invalid", "message": msg}
-    )
+    return HTTPException(status_code=401, detail={"code": "auth_invalid", "message": msg})
 
 
 def _expired() -> HTTPException:
@@ -38,7 +37,7 @@ def _expired() -> HTTPException:
 async def _fetch_jwks() -> list[dict[str, Any]]:
     now = time.monotonic()
     if _jwks_cache.get("expires_at", 0.0) > now:
-        return _jwks_cache["keys"]  # type: ignore[return-value]
+        return _jwks_cache["keys"]
     url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(url)
@@ -46,14 +45,14 @@ async def _fetch_jwks() -> list[dict[str, Any]]:
         data = resp.json()
     _jwks_cache["keys"] = data["keys"]
     _jwks_cache["expires_at"] = now + 300.0
-    return data["keys"]  # type: ignore[return-value]
+    return data["keys"]
 
 
 async def verify_jwt(token: str) -> UserClaims:
     try:
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:
-        raise _invalid()
+        raise _invalid() from None
 
     alg = header.get("alg", "HS256")
 
@@ -61,8 +60,6 @@ async def verify_jwt(token: str) -> UserClaims:
         if alg in ("ES256", "RS256"):
             keys = await _fetch_jwks()
             kid = header.get("kid")
-            from jwt import PyJWKSet  # noqa: PLC0415
-
             jwk_set = PyJWKSet.from_dict({"keys": keys})
             signing_key = None
             for k in jwk_set.keys:
@@ -71,9 +68,7 @@ async def verify_jwt(token: str) -> UserClaims:
                     break
             if signing_key is None:
                 raise _invalid("No matching JWKS key")
-            payload = jwt.decode(
-                token, signing_key, algorithms=[alg], audience="authenticated"
-            )
+            payload = jwt.decode(token, signing_key, algorithms=[alg], audience="authenticated")
         else:
             if not settings.supabase_jwt_secret:
                 raise _invalid("HS256 not configured")
@@ -84,11 +79,11 @@ async def verify_jwt(token: str) -> UserClaims:
                 audience="authenticated",
             )
     except jwt.ExpiredSignatureError:
-        raise _expired()
+        raise _expired() from None
     except HTTPException:
         raise
     except jwt.PyJWTError:
-        raise _invalid()
+        raise _invalid() from None
 
     sub = payload.get("sub")
     if not sub:
@@ -97,12 +92,15 @@ async def verify_jwt(token: str) -> UserClaims:
     try:
         return UserClaims(user_id=UUID(str(sub)), email=payload.get("email", ""))
     except (ValueError, TypeError):
-        raise _invalid("Invalid sub UUID")
+        raise _invalid("Invalid sub UUID") from None
 
 
 async def get_current_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> UserClaims:
     if not creds or creds.scheme.lower() != "bearer":
         raise _invalid("Missing bearer token")
-    return await verify_jwt(creds.credentials)
+    claims = await verify_jwt(creds.credentials)
+    request.state.user_id = claims.user_id  # read by the request-logging middleware
+    return claims

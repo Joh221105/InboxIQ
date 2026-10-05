@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { PickupCodeCard } from "@/components/packages/PickupCodeCard";
-import { UsedCodesSection } from "@/components/packages/UsedCodesSection";
+import { PickupCodeCard } from "@/components/packages/pickup-code-card";
+import { UsedCodesSection } from "@/components/packages/used-codes-section";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from decimal import Decimal
 from uuid import UUID
 
 from app.db.emails import apply_triage_result, list_unprocessed_emails, mark_ai_failed
 from app.db.users import get_user
-from app.services.openai_client import AIInvalidResponse, AIServiceUnavailable
-from app.services.triage import TriageResult, triage_email
+from app.models.ai import TriageResult
+from app.services.ai_client import AIInvalidResponse, AIServiceUnavailable
+from app.services.triage import triage_email
 
 logger = logging.getLogger(__name__)
 
@@ -23,19 +25,8 @@ async def _apply_with_tag_override(
     has_contact_tag: bool,
 ) -> None:
     if has_contact_tag and result.category == "auto_archive":
-        result = TriageResult(
-            category="worth_reading",
-            summary=result.summary,
-            triage_context=result.triage_context,
-            deadline_extracted=result.deadline_extracted,
-            action_items=result.action_items,
-            is_pickup_code=result.is_pickup_code,
-            pickup_code=result.pickup_code,
-            pickup_expiry=result.pickup_expiry,
-            retailer=result.retailer,
-            locker_location=result.locker_location,
-            cost_usd=result.cost_usd,
-        )
+        # Mail from a tagged contact is never hidden.
+        result = dataclasses.replace(result, category="worth_reading")
     await apply_triage_result(email_id, result)
 
 

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import asyncio
-import re
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Literal
+import logging
+import random
 from uuid import UUID
 
+from app.core.background import spawn
 from app.db import contact_tags as db
+from app.models.contact_tag import ContactTagCreate, CreateContactResponse
+from app.models.job import Job
+from app.services.jobs import JobRegistry
 
-VALID_TAG_TYPES = {"professor", "friend", "recruiter", "custom"}
+logger = logging.getLogger(__name__)
 
 DEFAULT_COLORS: dict[str, str] = {
     "professor": "#3B82F6",
@@ -32,20 +32,6 @@ CUSTOM_PALETTE = [
 SYNC_THRESHOLD = 100
 
 
-def normalize_identifier(s: str) -> str:
-    s = s.strip().lower()
-    if not s:
-        raise ValueError("identifier cannot be empty")
-    if s.startswith("@"):
-        domain = s[1:]
-        if not re.match(r"^[a-z0-9.-]+\.[a-z]{2,}$", domain):
-            raise ValueError(f"invalid domain identifier: {s!r}")
-        return s
-    if not re.match(r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$", s):
-        raise ValueError(f"invalid email identifier: {s!r}")
-    return s
-
-
 async def find_contact_tag(user_id: UUID, sender_email: str) -> UUID | None:
     """Return the most-specific matching tag id (full-email beats domain)."""
     sender = sender_email.lower()
@@ -65,29 +51,7 @@ async def find_contact_tag(user_id: UUID, sender_email: str) -> UUID | None:
     return full_match if full_match else domain_match
 
 
-@dataclass
-class ContactTagJob:
-    job_id: str
-    user_id: UUID
-    total: int
-    processed: int = 0
-    status: Literal["running", "done", "failed"] = "running"
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-JOBS: dict[str, ContactTagJob] = {}
-_JOB_TTL_SECONDS = 3600
-
-
-def _evict_stale_contact_jobs() -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=_JOB_TTL_SECONDS)
-    stale = [
-        job_id
-        for job_id, job in list(JOBS.items())
-        if job.status in ("done", "failed") and job.created_at < cutoff
-    ]
-    for job_id in stale:
-        JOBS.pop(job_id, None)
+CONTACT_TAG_JOBS = JobRegistry()
 
 
 async def apply_retroactive_async(
@@ -95,17 +59,17 @@ async def apply_retroactive_async(
     user_id: UUID,
     identifier: str,
 ) -> str:
-    _evict_stale_contact_jobs()
-    job_id = uuid.uuid4().hex
     total = await db.count_emails_for_identifier(user_id, identifier)
-    job = ContactTagJob(job_id=job_id, user_id=user_id, total=total)
-    JOBS[job_id] = job
-    asyncio.create_task(_process_retroactive(job, tag_id, user_id, identifier))
-    return job_id
+    job = CONTACT_TAG_JOBS.create(user_id, total=total)
+    spawn(
+        _process_retroactive(job, tag_id, user_id, identifier),
+        name=f"contact-retroactive:{job.job_id}",
+    )
+    return job.job_id
 
 
 async def _process_retroactive(
-    job: ContactTagJob,
+    job: Job,
     tag_id: UUID,
     user_id: UUID,
     identifier: str,
@@ -115,4 +79,26 @@ async def _process_retroactive(
         job.processed = updated
         job.status = "done"
     except Exception:
+        logger.exception("retroactive tagging failed for tag %s", tag_id)
         job.status = "failed"
+
+
+async def tag_contact(user_id: UUID, body: ContactTagCreate) -> CreateContactResponse:
+    """Create a tag and apply it to past emails.
+
+    Small backfills run inline; large ones run as a background job.
+    """
+    color = body.color or DEFAULT_COLORS.get(body.tag) or random.choice(CUSTOM_PALETTE)
+    tag = await db.create_tag(
+        user_id=user_id,
+        identifier=body.identifier,
+        tag=body.tag,
+        custom_label=body.custom_label,
+        color=color,
+    )
+    count = await db.count_emails_for_identifier(user_id, body.identifier)
+    if count <= SYNC_THRESHOLD:
+        await db.apply_retroactive_sync(tag.id, user_id, body.identifier)
+        return CreateContactResponse(tag=tag, retroactive_count=count, job_id=None)
+    job_id = await apply_retroactive_async(tag.id, user_id, body.identifier)
+    return CreateContactResponse(tag=tag, retroactive_count=count, job_id=job_id)

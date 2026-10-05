@@ -1,7 +1,6 @@
-# backend/tests/test_email_models.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.models.email import EmailFilters, ParsedEmail, SyncResult
@@ -13,7 +12,7 @@ def test_parsed_email_fields() -> None:
         sender_email="alice@example.com",
         subject="Hello",
         body_preview="Body text here",
-        received_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        received_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
     assert p.external_id == "abc123"
     assert p.sender_email == "alice@example.com"

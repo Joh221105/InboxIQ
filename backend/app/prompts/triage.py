@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.models.user import ContextMode
+
 TRIAGE_PROMPT_JOB_HUNTING = """You are an email triage assistant. The user is currently in Job Hunting mode.
 
 Classify each email into ONE category:
@@ -133,7 +135,7 @@ Input: From: notifications@social.example, Subject: "You have new likes",
 Body: "See who liked your recent post."
 Output: {"category":"auto_archive","summary":"Social network notification reports new likes on a recent post.","has_deadline":false,"has_action_items":false,"is_pickup_code":false}"""
 
-TRIAGE_PROMPTS = {
+TRIAGE_PROMPTS: dict[ContextMode, str] = {
     "Job Hunting": TRIAGE_PROMPT_JOB_HUNTING,
     "Shopping": TRIAGE_PROMPT_SHOPPING,
     "School Application": TRIAGE_PROMPT_SCHOOL,

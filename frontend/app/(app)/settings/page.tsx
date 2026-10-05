@@ -19,7 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { apiFetch } from "@/lib/api";
-import type { ConnectedAccount, EmailDataDeleteCounts, User } from "@/types";
+import { useConnectedAccounts, useUserContext } from "@/lib/queries/dashboard";
+import { useDeleteEmailData, useDisconnectAccount, useUpdateSettings } from "@/lib/queries/settings";
+import type { ConnectedAccount, User } from "@/types";
 
 const NOTIFICATION_TAGS = [
   { key: "professor", label: "Professor" },
@@ -46,163 +48,38 @@ function toastForResult(connected: string, reason: string | null) {
   }
 }
 
-function SettingsPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({});
-  const [retentionDays, setRetentionDays] = useState<string>("");
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [pendingDisconnect, setPendingDisconnect] = useState<ConnectedAccount | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  useEffect(() => {
-    const connected = searchParams.get("gmail_connected");
-    const reason = searchParams.get("reason");
-    if (connected) {
-      toastForResult(connected, reason);
-      router.replace("/settings");
+async function connectGmail() {
+  try {
+    const { url } = await apiFetch<{ url: string }>("/auth/gmail/start");
+    if (new URL(url).hostname !== "accounts.google.com") {
+      toast.error("Invalid OAuth redirect — please try again");
+      return;
     }
-  }, [searchParams, router]);
-
-  useEffect(() => {
-    apiFetch<ConnectedAccount[]>("/accounts")
-      .then(setAccounts)
-      .catch(() => {});
-    apiFetch<User>("/users/me")
-      .then((loadedUser) => {
-        setUser(loadedUser);
-        setNotificationPrefs(loadedUser.notification_tag_preferences ?? {});
-        setRetentionDays(
-          loadedUser.data_retention_days ? String(loadedUser.data_retention_days) : "",
-        );
-      })
-      .catch(() => {});
-  }, []);
-
-  async function connectGmail() {
-    try {
-      const { url } = await apiFetch<{ url: string }>("/auth/gmail/start");
-      const parsed = new URL(url);
-      if (parsed.hostname !== "accounts.google.com") {
-        toast.error("Invalid OAuth redirect — please try again");
-        return;
-      }
-      window.location.href = url;
-    } catch {
-      toast.error("Failed to start Gmail connection");
-    }
+    window.location.href = url;
+  } catch {
+    toast.error("Failed to start Gmail connection");
   }
+}
 
-  async function confirmDisconnect() {
-    if (!pendingDisconnect) return;
-    const account = pendingDisconnect;
-    setPendingDisconnect(null);
-    try {
-      await apiFetch(`/accounts/${account.id}`, { method: "DELETE" });
-      setAccounts((prev) => prev.filter((a) => a.id !== account.id));
-    } catch {
-      toast.error(`Failed to disconnect ${account.email_address}`);
-    }
-  }
+/** Form state is initialized once from the loaded user; the parent keys it by user id. */
+function PreferencesForm({ user, onDeleteRequested }: { user: User; onDeleteRequested: () => void }) {
+  const updateSettings = useUpdateSettings();
+  const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>(
+    user.notification_tag_preferences ?? {},
+  );
+  const [retentionDays, setRetentionDays] = useState(
+    user.data_retention_days ? String(user.data_retention_days) : "",
+  );
 
-  async function saveSettings() {
-    setSavingSettings(true);
-    const days = retentionDays.trim() ? Number(retentionDays) : null;
-    try {
-      const updated = await apiFetch<User>("/users/me/settings", {
-        method: "PATCH",
-        body: JSON.stringify({
-          notification_tag_preferences: notificationPrefs,
-          data_retention_days: days,
-        }),
-      });
-      setUser(updated);
-      setNotificationPrefs(updated.notification_tag_preferences ?? {});
-      setRetentionDays(updated.data_retention_days ? String(updated.data_retention_days) : "");
-      toast.success("Settings saved");
-    } catch {
-      toast.error("Failed to save settings");
-    } finally {
-      setSavingSettings(false);
-    }
-  }
-
-  async function deleteEmailData() {
-    setDeleteOpen(false);
-    try {
-      const counts = await apiFetch<EmailDataDeleteCounts>("/users/me/email-data", {
-        method: "DELETE",
-      });
-      toast.success(`Deleted ${counts.emails} emails and related AI records`);
-    } catch {
-      toast.error("Failed to delete stored email data");
-    }
+  function save() {
+    updateSettings.mutate({
+      notification_tag_preferences: notificationPrefs,
+      data_retention_days: retentionDays.trim() ? Number(retentionDays) : null,
+    });
   }
 
   return (
-    <main className="max-w-3xl space-y-8 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <Button onClick={connectGmail}>Connect Gmail</Button>
-      </div>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground mb-3">
-          Connected accounts
-        </h2>
-
-        {accounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No accounts connected. Click Connect Gmail to get started.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {accounts.map((account) => {
-              const isDisconnected = Boolean(account.disconnected_at);
-              return (
-                <li
-                  key={account.id}
-                  className="flex items-center justify-between rounded-lg border px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="h-3 w-3 rounded-full shrink-0"
-                      style={{ backgroundColor: isDisconnected ? "#ef4444" : (account.color ?? "#6b7280") }}
-                    />
-                    <div>
-                      <p className="text-sm font-medium">{account.email_address}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {isDisconnected
-                          ? "Connection expired — reconnect to resume syncing"
-                          : account.last_synced
-                            ? `Last synced ${formatDistanceToNow(new Date(account.last_synced))} ago`
-                            : "Never synced"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {isDisconnected ? (
-                    <Button size="sm" onClick={connectGmail}>
-                      Reconnect
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPendingDisconnect(account)}
-                    >
-                      Disconnect
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
+    <>
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">Notification preferences</h2>
         <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
@@ -237,34 +114,143 @@ function SettingsPageContent() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={saveSettings} disabled={savingSettings}>
-              {savingSettings ? "Saving..." : "Save settings"}
+            <Button onClick={save} disabled={updateSettings.isPending}>
+              {updateSettings.isPending ? "Saving..." : "Save settings"}
             </Button>
-            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <Button variant="destructive" onClick={onDeleteRequested}>
               Delete stored email data
             </Button>
           </div>
         </div>
       </section>
+    </>
+  );
+}
+
+function AccountList({
+  accounts,
+  onDisconnect,
+}: {
+  accounts: ConnectedAccount[];
+  onDisconnect: (account: ConnectedAccount) => void;
+}) {
+  if (accounts.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No accounts connected. Click Connect Gmail to get started.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {accounts.map((account) => {
+        const isDisconnected = Boolean(account.disconnected_at);
+        return (
+          <li
+            key={account.id}
+            className="flex items-center justify-between rounded-lg border px-4 py-3"
+          >
+            <div className="flex items-center gap-3">
+              <span
+                className="h-3 w-3 shrink-0 rounded-full"
+                style={{ backgroundColor: isDisconnected ? "#ef4444" : (account.color ?? "#6b7280") }}
+              />
+              <div>
+                <p className="text-sm font-medium">{account.email_address}</p>
+                <p className="text-xs text-muted-foreground">
+                  {isDisconnected
+                    ? "Connection expired — reconnect to resume syncing"
+                    : account.last_synced
+                      ? `Last synced ${formatDistanceToNow(new Date(account.last_synced))} ago`
+                      : "Never synced"}
+                </p>
+              </div>
+            </div>
+
+            {isDisconnected ? (
+              <Button size="sm" onClick={connectGmail}>
+                Reconnect
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => onDisconnect(account)}>
+                Disconnect
+              </Button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function SettingsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const accountsQuery = useConnectedAccounts();
+  const userQuery = useUserContext();
+  const disconnect = useDisconnectAccount();
+  const deleteEmailData = useDeleteEmailData();
+  const [pendingDisconnect, setPendingDisconnect] = useState<ConnectedAccount | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  useEffect(() => {
+    const connected = searchParams.get("gmail_connected");
+    if (connected) {
+      toastForResult(connected, searchParams.get("reason"));
+      router.replace("/settings");
+    }
+  }, [searchParams, router]);
+
+  function confirmDisconnect() {
+    if (!pendingDisconnect) return;
+    const account = pendingDisconnect;
+    setPendingDisconnect(null);
+    disconnect.mutate(account);
+  }
+
+  return (
+    <main className="max-w-3xl space-y-8 p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <Button onClick={connectGmail}>Connect Gmail</Button>
+      </div>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Connected accounts</h2>
+        {accountsQuery.isError ? (
+          <p className="text-sm text-destructive">Couldn&apos;t load connected accounts.</p>
+        ) : (
+          <AccountList accounts={accountsQuery.data ?? []} onDisconnect={setPendingDisconnect} />
+        )}
+      </section>
+
+      {userQuery.data ? (
+        <PreferencesForm
+          key={userQuery.data.id}
+          user={userQuery.data}
+          onDeleteRequested={() => setDeleteOpen(true)}
+        />
+      ) : null}
 
       <AlertDialog
         open={pendingDisconnect !== null}
-        onOpenChange={(open) => { if (!open) setPendingDisconnect(null); }}
+        onOpenChange={(open) => {
+          if (!open) setPendingDisconnect(null);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Disconnect account?</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to disconnect{" "}
-              <span className="font-medium">{pendingDisconnect?.email_address}</span>?
-              This will stop syncing emails from this account.
+              <span className="font-medium">{pendingDisconnect?.email_address}</span>? This will
+              stop syncing emails from this account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDisconnect}>
-              Disconnect
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmDisconnect}>Disconnect</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -280,7 +266,14 @@ function SettingsPageContent() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteEmailData}>Delete data</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                setDeleteOpen(false);
+                deleteEmailData.mutate();
+              }}
+            >
+              Delete data
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

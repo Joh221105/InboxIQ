@@ -1,28 +1,28 @@
 .PHONY: install dev test lint typecheck format migrations
 
 install:
-	cd frontend && npm install
-	cd backend && pip install -r requirements.txt
+	cd backend && python3.11 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+	cd frontend && npm ci
 
 dev:
-	cd frontend && npx concurrently \
-		"npm run dev" \
-		"sh -c 'cd ../backend && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000'"
+	cd frontend && npx concurrently -n api,web \
+		"cd ../backend && .venv/bin/uvicorn app.main:app --reload --port 8000" \
+		"npm run dev"
 
 test:
-	cd backend && python -m pytest tests/ -v
+	cd backend && .venv/bin/pytest -q
 	cd frontend && npm test
 
 lint:
-	cd backend && ruff check app/ tests/
+	cd backend && .venv/bin/ruff check app tests scripts && .venv/bin/ruff format --check app tests scripts
 	cd frontend && npm run lint
 
 typecheck:
-	cd backend && mypy app/
-	cd frontend && npx tsc --noEmit
+	cd backend && .venv/bin/mypy app
+	cd frontend && npm run typecheck
 
 format:
-	cd backend && ruff format app/ tests/
+	cd backend && .venv/bin/ruff check --fix app tests scripts && .venv/bin/ruff format app tests scripts
 
 migrations:
-	cd backend && python scripts/print_migrations.py
+	@python3 backend/scripts/print_migrations.py

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 
-from app.services.contact_tags import (
-    find_contact_tag,
-    normalize_identifier,
-)
-
+from app.models.contact_tag import normalize_identifier
+from app.services.contact_tags import find_contact_tag
 
 # ---------------------------------------------------------------------------
 # normalize_identifier
@@ -68,8 +66,9 @@ def test_normalize_spaces_inside_raises() -> None:
 
 
 def _make_tag(identifier: str, tag: str = "friend") -> object:
+    from datetime import datetime
+
     from app.models.contact_tag import ContactTag
-    from datetime import datetime, timezone
 
     return ContactTag(
         id=uuid4(),
@@ -77,7 +76,7 @@ def _make_tag(identifier: str, tag: str = "friend") -> object:
         identifier=identifier,
         tag=tag,
         color="#000",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 

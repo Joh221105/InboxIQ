@@ -1,4 +1,3 @@
-# backend/app/models/email.py
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -11,11 +10,11 @@ TriageCategory = Literal["action_required", "worth_reading", "auto_archive"]
 
 
 class ParsedEmail(BaseModel):
-    external_id: str          # maps to emails.gmail_id
-    sender_email: str         # maps to emails.sender (always lowercased)
+    external_id: str  # maps to emails.gmail_id
+    sender_email: str  # maps to emails.sender (always lowercased)
     sender_name: str | None = None
     subject: str
-    body_preview: str         # maps to emails.body_text
+    body_preview: str  # maps to emails.body_text
     received_at: datetime
 
 
@@ -29,6 +28,7 @@ class SyncResult(BaseModel):
 class ContactTagInfo(BaseModel):
     """Read-only projection of a contact tag embedded in email responses.
     label is always populated: custom_label if set, else tag.capitalize()."""
+
     label: str
     color: str
 
@@ -77,7 +77,7 @@ class EmailFilters(BaseModel):
     user_id: UUID
     account_id: UUID | None = None
     contact_tag_id: UUID | None = None
-    triage_category: TriageCategory | None = None   # maps to ai_category in current schema
+    triage_category: TriageCategory | None = None  # maps to ai_category in current schema
     is_archived: bool = False
     since: datetime | None = None
     search: str | None = None
@@ -87,7 +87,7 @@ class EmailFilters(BaseModel):
     deadline_before: date | None = None
     order: Literal["received_desc", "deadline_asc"] = "received_desc"
     cursor: str | None = None
-    limit: int = 50
+    limit: int = Field(default=50, ge=1, le=100)
 
     @field_validator("sender_search")
     @classmethod

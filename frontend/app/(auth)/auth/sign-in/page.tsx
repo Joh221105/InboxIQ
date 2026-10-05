@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bun } from "@/components/bun";
+import { cn } from "@/lib/utils";
 
 /* ── Forgot-password sub-form ───────────────────────────────── */
 function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
@@ -265,29 +266,36 @@ export default function SignInPage() {
             </p>
           </div>
 
-          {/* tab switcher */}
+          {/* mode switcher */}
           <div
-            className="mb-5 flex rounded-full border p-[3px]"
-            style={{ background: "var(--muted)", borderColor: "var(--border)" }}
+            role="tablist"
+            aria-label="Account access"
+            className="mb-5 flex rounded-full border border-border bg-muted p-[3px]"
           >
             {(["sign-in", "sign-up"] as const).map((t) => (
               <button
                 key={t}
+                id={`auth-tab-${t}`}
                 type="button"
+                role="tab"
+                aria-selected={tab === t}
+                aria-controls="auth-panel"
                 onClick={() => setTab(t)}
-                className="flex-1 rounded-full py-1.5 text-[13.5px] font-medium transition-colors duration-150"
-                style={
+                className={cn(
+                  "flex-1 rounded-full py-1.5 text-[13.5px] font-medium transition-colors duration-150",
                   tab === t
-                    ? { background: "var(--card)", color: "var(--foreground)", boxShadow: "0 1px 3px oklch(0.40 0.03 60 / 0.08)" }
-                    : { color: "var(--muted-foreground)" }
-                }
+                    ? "bg-card text-foreground shadow-[0_1px_3px_oklch(0.40_0.03_60/0.08)]"
+                    : "text-muted-foreground",
+                )}
               >
                 {t === "sign-in" ? "Sign in" : "Sign up"}
               </button>
             ))}
           </div>
 
-          {tab === "sign-in" ? <SignInForm /> : <SignUpForm />}
+          <div role="tabpanel" id="auth-panel" aria-labelledby={`auth-tab-${tab}`}>
+            {tab === "sign-in" ? <SignInForm /> : <SignUpForm />}
+          </div>
         </div>
       </div>
     </div>

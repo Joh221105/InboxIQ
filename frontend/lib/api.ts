@@ -13,50 +13,61 @@ export class ApiError extends Error {
   }
 }
 
-async function getAuthToken(): Promise<string | null> {
-  const supabase = createBrowserSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+/**
+ * Extract `{ code, message }` from a FastAPI error body. Handles the app's
+ * envelope (`{detail: {code, message}}`), plain string details, and request
+ * validation errors (`{detail: [{msg, ...}]}`).
+ */
+export function parseErrorBody(
+  body: unknown,
+  fallbackMessage: string,
+): { code: string; message: string } {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") {
+    return { code: "error", message: detail };
+  }
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: unknown } | undefined;
+    return {
+      code: "validation_error",
+      message: typeof first?.msg === "string" ? first.msg : fallbackMessage,
+    };
+  }
+  if (detail && typeof detail === "object") {
+    const { code, message } = detail as { code?: unknown; message?: unknown };
+    return {
+      code: typeof code === "string" ? code : "unknown_error",
+      message: typeof message === "string" ? message : fallbackMessage,
+    };
+  }
+  return { code: "unknown_error", message: fallbackMessage };
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
-  const token = await getAuthToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(init.headers as Record<string, string>),
-  };
+async function getAccessToken(): Promise<string | null> {
+  // The backend verifies the JWT on every request, so the locally cached
+  // session is sufficient here; no extra round trip to Supabase Auth.
+  const { data } = await createBrowserSupabaseClient().auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const token = await getAccessToken();
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
 
   if (!res.ok) {
-    let code = "unknown_error";
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      code = body.code ?? code;
-      message = body.message ?? message;
-    } catch {
-      /* ignore parse error */
-    }
+    const body: unknown = await res.json().catch(() => null);
+    const { code, message } = parseErrorBody(body, res.statusText);
     throw new ApiError(res.status, code, message);
   }
 
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
   const text = await res.text();
-  if (!text) {
-    return undefined as T;
-  }
-
-  return JSON.parse(text) as T;
+  return (text ? JSON.parse(text) : undefined) as T;
 }

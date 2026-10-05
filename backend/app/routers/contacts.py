@@ -1,146 +1,67 @@
 from __future__ import annotations
 
-import random
+from typing import get_args
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends
 
 from app.core.auth import UserClaims, get_current_user
-from app.db.contact_tags import (
-    UniqueViolation,
-    apply_retroactive_sync,
-    count_emails_for_identifier,
-    create_tag,
-    delete_tag,
-    list_user_tags,
-    update_tag,
-)
+from app.core.errors import NotFoundError
+from app.db.contact_tags import delete_tag, list_user_tags, update_tag
 from app.models.contact_tag import (
-    ContactJobStatus,
+    ContactsGrouped,
     ContactTag,
     ContactTagCreate,
     ContactTagUpdate,
-    ContactsGrouped,
     CreateContactResponse,
+    TagType,
 )
-from app.services.contact_tags import (
-    CUSTOM_PALETTE,
-    DEFAULT_COLORS,
-    JOBS,
-    SYNC_THRESHOLD,
-    VALID_TAG_TYPES,
-    apply_retroactive_async,
-    normalize_identifier,
-)
+from app.models.job import JobStatusResponse
+from app.services.contact_tags import CONTACT_TAG_JOBS, tag_contact
 
 router = APIRouter(tags=["contacts"])
 
 
-@router.post("/contacts", response_model=CreateContactResponse)
+@router.post("/contacts")
 async def post_contact(
     body: ContactTagCreate,
     claims: UserClaims = Depends(get_current_user),
 ) -> CreateContactResponse:
-    try:
-        identifier = normalize_identifier(body.identifier)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    if body.tag not in VALID_TAG_TYPES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"tag must be one of: {', '.join(sorted(VALID_TAG_TYPES))}",
-        )
-
-    if body.tag == "custom" and not body.custom_label:
-        raise HTTPException(status_code=422, detail="custom_label is required for custom tags")
-
-    if body.color:
-        color = body.color
-    elif body.tag in DEFAULT_COLORS:
-        color = DEFAULT_COLORS[body.tag]
-    else:
-        color = random.choice(CUSTOM_PALETTE)
-
-    try:
-        tag = await create_tag(
-            user_id=claims.user_id,
-            identifier=identifier,
-            tag=body.tag,
-            custom_label=body.custom_label,
-            color=color,
-        )
-    except UniqueViolation:
-        raise HTTPException(status_code=409, detail={"reason": "duplicate"})
-
-    count = await count_emails_for_identifier(claims.user_id, identifier)
-
-    if count <= SYNC_THRESHOLD:
-        await apply_retroactive_sync(tag.id, claims.user_id, identifier)
-        return CreateContactResponse(tag=tag, retroactive_count=count, job_id=None)
-    else:
-        job_id = await apply_retroactive_async(tag.id, claims.user_id, identifier)
-        return CreateContactResponse(tag=tag, retroactive_count=count, job_id=job_id)
+    return await tag_contact(claims.user_id, body)
 
 
-@router.get("/contacts", response_model=ContactsGrouped)
-async def get_contacts(
-    claims: UserClaims = Depends(get_current_user),
-) -> ContactsGrouped:
-    tags = await list_user_tags(claims.user_id)
-    grouped: dict[str, list[ContactTag]] = {
-        "professor": [],
-        "friend": [],
-        "recruiter": [],
-        "custom": [],
-    }
-    for tag in tags:
-        if tag.tag in grouped:
-            grouped[tag.tag].append(tag)
+@router.get("/contacts")
+async def get_contacts(claims: UserClaims = Depends(get_current_user)) -> ContactsGrouped:
+    grouped: dict[str, list[ContactTag]] = {tag_type: [] for tag_type in get_args(TagType)}
+    for tag in await list_user_tags(claims.user_id):
+        grouped[tag.tag].append(tag)
     return ContactsGrouped(**grouped)
 
 
-@router.delete("/contacts/{tag_id}")
+@router.delete("/contacts/{tag_id}", status_code=204, response_model=None)
 async def delete_contact(
     tag_id: UUID,
     claims: UserClaims = Depends(get_current_user),
-) -> Response:
-    deleted = await delete_tag(tag_id, claims.user_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Contact tag not found")
-    return Response(status_code=204)
+) -> None:
+    if not await delete_tag(tag_id, claims.user_id):
+        raise NotFoundError("Contact tag not found.")
 
 
-@router.patch("/contacts/{tag_id}", response_model=ContactTag)
+@router.patch("/contacts/{tag_id}")
 async def patch_contact(
     tag_id: UUID,
     body: ContactTagUpdate,
     claims: UserClaims = Depends(get_current_user),
 ) -> ContactTag:
-    changes: dict[str, object] = {}
-    if body.custom_label is not None:
-        changes["custom_label"] = body.custom_label
-    if body.color is not None:
-        changes["color"] = body.color
-    if not changes:
-        raise HTTPException(status_code=422, detail="No updatable fields provided")
-    updated = await update_tag(tag_id, claims.user_id, changes)
+    updated = await update_tag(tag_id, claims.user_id, body.changes())
     if updated is None:
-        raise HTTPException(status_code=404, detail="Contact tag not found")
+        raise NotFoundError("Contact tag not found.")
     return updated
 
 
-@router.get("/contacts/jobs/{job_id}", response_model=ContactJobStatus)
+@router.get("/contacts/jobs/{job_id}")
 async def get_contact_job(
     job_id: str,
     claims: UserClaims = Depends(get_current_user),
-) -> ContactJobStatus:
-    job = JOBS.get(job_id)
-    if not job or job.user_id != claims.user_id:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return ContactJobStatus(
-        job_id=job.job_id,
-        status=job.status,
-        processed=job.processed,
-        total=job.total,
-    )
+) -> JobStatusResponse:
+    return JobStatusResponse.from_job(CONTACT_TAG_JOBS.get_for_user(job_id, claims.user_id))

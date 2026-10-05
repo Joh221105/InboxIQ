@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 
+from app.models.ai import TriageResult
 from app.models.email import Email
 from app.models.user import User
-from app.services.openai_client import AIServiceUnavailable
-from app.services.triage import TriageResult
+from app.services.ai_client import AIServiceUnavailable
 
 
 def _email(user_id=None) -> Email:
@@ -21,9 +21,9 @@ def _email(user_id=None) -> Email:
         gmail_id=uuid4().hex,
         subject="Subject",
         sender="sender@example.com",
-        received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 13, tzinfo=UTC),
         body_text="Body",
-        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
 
 
@@ -45,13 +45,18 @@ async def test_process_batch_applies_success_and_marks_failure() -> None:
 
     user_id = uuid4()
     emails = [_email(user_id), _email(user_id)]
-    user = User(id=user_id, email="u@example.com", default_context="Daily", created_at=datetime.now(timezone.utc))
+    user = User(
+        id=user_id, email="u@example.com", default_context="Daily", created_at=datetime.now(UTC)
+    )
     result = TriageResult(category="worth_reading", summary="Summary", triage_context="Daily")
 
     with (
         patch("app.tasks.ai_worker.list_unprocessed_emails", new=AsyncMock(return_value=emails)),
         patch("app.tasks.ai_worker.get_user", new=AsyncMock(return_value=user)),
-        patch("app.tasks.ai_worker.triage_email", new=AsyncMock(side_effect=[result, AIServiceUnavailable("down")])),
+        patch(
+            "app.tasks.ai_worker.triage_email",
+            new=AsyncMock(side_effect=[result, AIServiceUnavailable("down")]),
+        ),
         patch("app.tasks.ai_worker.apply_triage_result", new=AsyncMock()) as apply_result,
         patch("app.tasks.ai_worker.mark_ai_failed", new=AsyncMock()) as mark_failed,
     ):
@@ -68,7 +73,9 @@ async def test_process_batch_stops_when_cost_cap_exceeded() -> None:
 
     user_id = uuid4()
     emails = [_email(user_id) for _ in range(5)]
-    user = User(id=user_id, email="u@example.com", default_context="Daily", created_at=datetime.now(timezone.utc))
+    user = User(
+        id=user_id, email="u@example.com", default_context="Daily", created_at=datetime.now(UTC)
+    )
 
     async def _fake_triage(_email: Email, _context: str) -> TriageResult:
         return TriageResult(

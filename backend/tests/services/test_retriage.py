@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 
+from app.core.errors import RateLimitedError
 from app.models.ai import TriageResponse
 from app.models.email import Email
 
@@ -19,9 +20,9 @@ def _email(user_id) -> Email:
         gmail_id=uuid4().hex,
         subject="Subject",
         sender="sender@example.com",
-        received_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        received_at=datetime(2026, 5, 13, tzinfo=UTC),
         body_text="Body",
-        created_at=datetime(2026, 5, 13, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 13, tzinfo=UTC),
     )
 
 
@@ -36,7 +37,7 @@ async def test_start_retriage_rate_limits_second_request() -> None:
         patch("app.services.retriage.list_emails_for_retriage", new=AsyncMock(return_value=[])),
     ):
         await retriage.start_retriage(user_id, "Daily")
-        with pytest.raises(retriage.RateLimited):
+        with pytest.raises(RateLimitedError):
             await retriage.start_retriage(user_id, "Shopping")
 
 
@@ -91,36 +92,15 @@ async def test_retriage_job_tracking_moves_to_done() -> None:
     assert job.total == 2
 
 
-def test_evict_stale_entries_removes_old_jobs() -> None:
-    from app.services.retriage import JOBS, RetriageJob, _evict_stale_entries, _last_request_at
+def test_rate_limit_memory_forgets_old_requests() -> None:
+    from app.services.retriage import _evict_stale_rate_limits, _last_request_at
 
-    JOBS.clear()
     _last_request_at.clear()
-    job_id = "old_job"
-    user_id = uuid4()
-    old_job = RetriageJob(job_id=job_id, user_id=user_id, total=5)
-    old_job.status = "done"
-    old_job.created_at = datetime.now(timezone.utc) - timedelta(seconds=7201)
-    JOBS[job_id] = old_job
-    _last_request_at[user_id] = datetime.now(timezone.utc) - timedelta(seconds=7201)
+    old_user, recent_user = uuid4(), uuid4()
+    _last_request_at[old_user] = datetime.now(UTC) - timedelta(hours=2)
+    _last_request_at[recent_user] = datetime.now(UTC)
 
-    _evict_stale_entries(ttl_seconds=3600)
+    _evict_stale_rate_limits()
 
-    assert job_id not in JOBS
-    assert user_id not in _last_request_at
-
-
-def test_evict_stale_entries_keeps_recent_jobs() -> None:
-    from app.services.retriage import JOBS, RetriageJob, _evict_stale_entries, _last_request_at
-
-    JOBS.clear()
-    _last_request_at.clear()
-    job_id = "new_job"
-    user_id = uuid4()
-    JOBS[job_id] = RetriageJob(job_id=job_id, user_id=user_id, total=3)
-    _last_request_at[user_id] = datetime.now(timezone.utc)
-
-    _evict_stale_entries(ttl_seconds=3600)
-
-    assert job_id in JOBS
-    assert user_id in _last_request_at
+    assert old_user not in _last_request_at
+    assert recent_user in _last_request_at

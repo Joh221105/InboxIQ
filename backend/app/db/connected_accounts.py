@@ -1,26 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from fastapi import HTTPException
-from pydantic import ValidationError
-
+from app.core.errors import NotFoundError
 from app.db.supabase import get_service_client
 from app.models.connected_account import ConnectedAccount, OAuthTokens
 
 
 def _row_to_account(row: dict[str, Any]) -> ConnectedAccount:
-    raw_token = row.get("oauth_token") or {}
-    try:
-        token = OAuthTokens(**raw_token)
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Malformed oauth_token in DB for account {row.get('id')}: {exc}",
-        ) from exc
+    token = OAuthTokens.model_validate(row.get("oauth_token") or {})
     return ConnectedAccount(**{**row, "oauth_token": token})
 
 
@@ -32,17 +23,21 @@ async def upsert_account(
 ) -> ConnectedAccount:
     def _upsert() -> dict[str, Any]:
         client = get_service_client()
-        result = client.table("connected_accounts").upsert(
-            {
-                "user_id": str(user_id),
-                "email_address": email_address,
-                "provider": provider,
-                "oauth_token": oauth_token.model_dump(mode="json"),
-                "disconnected_at": None,
-                "disconnected_reason": None,
-            },
-            on_conflict="user_id,email_address",
-        ).execute()
+        result = (
+            client.table("connected_accounts")
+            .upsert(
+                {
+                    "user_id": str(user_id),
+                    "email_address": email_address,
+                    "provider": provider,
+                    "oauth_token": oauth_token.model_dump(mode="json"),
+                    "disconnected_at": None,
+                    "disconnected_reason": None,
+                },
+                on_conflict="user_id,email_address",
+            )
+            .execute()
+        )
         if not result.data:
             raise RuntimeError("upsert returned no data")
         row = result.data[0]
@@ -75,11 +70,11 @@ async def get_account(account_id: UUID) -> ConnectedAccount:
             .maybe_single()
             .execute()
         )
-        return result.data  # type: ignore[return-value]
+        return result.data if result is not None else None  # maybe_single(): None when no row
 
     row = await asyncio.to_thread(_fetch)
     if not row:
-        raise HTTPException(status_code=404, detail="Account not found")
+        raise NotFoundError("Account not found.")
     return _row_to_account(row)
 
 
@@ -113,7 +108,7 @@ async def update_oauth_token(account_id: UUID, new_token: OAuthTokens) -> Connec
 
     row = await asyncio.to_thread(_update)
     if not row:
-        raise HTTPException(status_code=404, detail="Account not found")
+        raise NotFoundError("Account not found.")
     return _row_to_account(row)
 
 
@@ -121,7 +116,7 @@ async def mark_disconnected(account_id: UUID, reason: str) -> None:
     def _update() -> None:
         get_service_client().table("connected_accounts").update(
             {
-                "disconnected_at": datetime.now(timezone.utc).isoformat(),
+                "disconnected_at": datetime.now(UTC).isoformat(),
                 "disconnected_reason": reason,
             }
         ).eq("id", str(account_id)).execute()
@@ -148,7 +143,7 @@ async def update_last_synced(account_id: UUID, synced_at: datetime) -> None:
 
 
 async def list_accounts_due_for_sync() -> list[ConnectedAccount]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=14)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(minutes=14)).isoformat()
 
     def _fetch() -> list[dict[str, Any]]:
         result = (

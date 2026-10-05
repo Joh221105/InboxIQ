@@ -1,7 +1,6 @@
-# backend/tests/db/test_connected_accounts_sync.py
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -13,10 +12,12 @@ from app.db.connected_accounts import list_accounts_due_for_sync, update_last_sy
 @pytest.mark.asyncio
 async def test_update_last_synced_calls_supabase() -> None:
     account_id = uuid4()
-    now = datetime(2025, 6, 1, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
 
     mock_client = MagicMock()
-    mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+    mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = (
+        MagicMock()
+    )
 
     with patch("app.db.connected_accounts.get_service_client", return_value=mock_client):
         await update_last_synced(account_id, now)

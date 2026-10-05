@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
@@ -8,10 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.auth import UserClaims, get_current_user
-from app.db.contact_tags import UniqueViolation
+from app.core.errors import ConflictError
 from app.main import app
 from app.models.contact_tag import ContactTag
-from app.services.contact_tags import JOBS, ContactTagJob
+from app.services.contact_tags import CONTACT_TAG_JOBS
 
 _USER_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 _OTHER_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -28,7 +28,7 @@ def _make_tag(
         identifier=identifier,
         tag=tag,
         color="#F59E0B",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -42,7 +42,7 @@ def authed_client() -> TestClient:
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
-    JOBS.clear()
+    CONTACT_TAG_JOBS.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +53,12 @@ def authed_client() -> TestClient:
 def test_post_contact_happy_path(authed_client: TestClient) -> None:
     tag = _make_tag()
     with (
-        patch("app.routers.contacts.create_tag", new=AsyncMock(return_value=tag)),
-        patch("app.routers.contacts.count_emails_for_identifier", new=AsyncMock(return_value=5)),
-        patch("app.routers.contacts.apply_retroactive_sync", new=AsyncMock(return_value=5)),
+        patch("app.services.contact_tags.db.create_tag", new=AsyncMock(return_value=tag)),
+        patch(
+            "app.services.contact_tags.db.count_emails_for_identifier",
+            new=AsyncMock(return_value=5),
+        ),
+        patch("app.services.contact_tags.db.apply_retroactive_sync", new=AsyncMock(return_value=5)),
     ):
         resp = authed_client.post(
             "/contacts",
@@ -72,9 +75,14 @@ def test_post_contact_happy_path(authed_client: TestClient) -> None:
 def test_post_contact_normalizes_identifier(authed_client: TestClient) -> None:
     tag = _make_tag(identifier="alice@example.com")
     with (
-        patch("app.routers.contacts.create_tag", new=AsyncMock(return_value=tag)) as mock_create,
-        patch("app.routers.contacts.count_emails_for_identifier", new=AsyncMock(return_value=0)),
-        patch("app.routers.contacts.apply_retroactive_sync", new=AsyncMock(return_value=0)),
+        patch(
+            "app.services.contact_tags.db.create_tag", new=AsyncMock(return_value=tag)
+        ) as mock_create,
+        patch(
+            "app.services.contact_tags.db.count_emails_for_identifier",
+            new=AsyncMock(return_value=0),
+        ),
+        patch("app.services.contact_tags.db.apply_retroactive_sync", new=AsyncMock(return_value=0)),
     ):
         authed_client.post(
             "/contacts",
@@ -86,7 +94,10 @@ def test_post_contact_normalizes_identifier(authed_client: TestClient) -> None:
 
 
 def test_post_contact_duplicate_returns_409(authed_client: TestClient) -> None:
-    with patch("app.routers.contacts.create_tag", new=AsyncMock(side_effect=UniqueViolation)):
+    with patch(
+        "app.services.contact_tags.db.create_tag",
+        new=AsyncMock(side_effect=ConflictError(code="duplicate_contact")),
+    ):
         resp = authed_client.post(
             "/contacts",
             json={"identifier": "alice@example.com", "tag": "recruiter"},
@@ -113,9 +124,15 @@ def test_post_contact_invalid_tag_type_returns_422(authed_client: TestClient) ->
 def test_post_contact_count_above_threshold_returns_job_id(authed_client: TestClient) -> None:
     tag = _make_tag()
     with (
-        patch("app.routers.contacts.create_tag", new=AsyncMock(return_value=tag)),
-        patch("app.routers.contacts.count_emails_for_identifier", new=AsyncMock(return_value=200)),
-        patch("app.routers.contacts.apply_retroactive_async", new=AsyncMock(return_value="abc123")),
+        patch("app.services.contact_tags.db.create_tag", new=AsyncMock(return_value=tag)),
+        patch(
+            "app.services.contact_tags.db.count_emails_for_identifier",
+            new=AsyncMock(return_value=200),
+        ),
+        patch(
+            "app.services.contact_tags.apply_retroactive_async",
+            new=AsyncMock(return_value="abc123"),
+        ),
     ):
         resp = authed_client.post(
             "/contacts",
@@ -186,7 +203,7 @@ def test_patch_contact_updates_label_and_color(authed_client: TestClient) -> Non
         tag="professor",
         custom_label="My Prof",
         color="#FF0000",
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
     with patch("app.routers.contacts.update_tag", new=AsyncMock(return_value=tag)):
         resp = authed_client.patch(
@@ -215,22 +232,46 @@ def test_patch_contact_not_found(authed_client: TestClient) -> None:
 
 
 def test_get_contact_job_for_owner(authed_client: TestClient) -> None:
-    job = ContactTagJob(job_id="job1", user_id=_USER_ID, total=50, processed=30)
-    JOBS["job1"] = job
+    job = CONTACT_TAG_JOBS.create(_USER_ID, total=50)
+    job.processed = 30
 
-    resp = authed_client.get("/contacts/jobs/job1")
+    resp = authed_client.get(f"/contacts/jobs/{job.job_id}")
 
     assert resp.status_code == 200
     data = resp.json()
+    assert data["job_id"] == job.job_id
     assert data["status"] == "running"
     assert data["processed"] == 30
     assert data["total"] == 50
 
 
 def test_get_contact_job_for_other_user_returns_404(authed_client: TestClient) -> None:
-    job = ContactTagJob(job_id="job2", user_id=_OTHER_ID, total=10)
-    JOBS["job2"] = job
+    job = CONTACT_TAG_JOBS.create(_OTHER_ID, total=10)
 
-    resp = authed_client.get("/contacts/jobs/job2")
+    resp = authed_client.get(f"/contacts/jobs/{job.job_id}")
 
     assert resp.status_code == 404
+
+
+def test_post_contact_duplicate_returns_envelope(authed_client: TestClient) -> None:
+    with patch(
+        "app.services.contact_tags.db.create_tag",
+        new=AsyncMock(
+            side_effect=ConflictError("This sender is already tagged.", code="duplicate_contact")
+        ),
+    ):
+        resp = authed_client.post("/contacts", json={"identifier": "a@b.com", "tag": "friend"})
+    assert resp.status_code == 409
+    assert resp.json() == {
+        "detail": {"code": "duplicate_contact", "message": "This sender is already tagged."}
+    }
+
+
+def test_post_contact_rejects_unknown_tag_type(authed_client: TestClient) -> None:
+    resp = authed_client.post("/contacts", json={"identifier": "a@b.com", "tag": "boss"})
+    assert resp.status_code == 422
+
+
+def test_patch_contact_requires_a_change(authed_client: TestClient) -> None:
+    resp = authed_client.patch(f"/contacts/{uuid4()}", json={})
+    assert resp.status_code == 422
