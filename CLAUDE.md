@@ -10,7 +10,7 @@ docs/architecture.md covers the design. Read both before starting work.
 - DB/Auth: Supabase (Postgres) with RLS enabled on every table
 - AI: OpenRouter with Anthropic fallback, via `app/services/ai_client.py`
 - Email: Gmail API via google-api-python-client
-- Deploy: Vercel (frontend), Railway (backend)
+- Hosting: runs locally for now; set up for Vercel (frontend) and Railway (backend)
 
 ## Folder structure
 ```

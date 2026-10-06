@@ -12,7 +12,7 @@ flowchart LR
   subgraph Browser
     UI[Next.js app<br/>React Query]
   end
-  subgraph Vercel
+  subgraph Next[Next.js server]
     MW[Next.js middleware<br/>session refresh]
   end
   subgraph API[FastAPI service]

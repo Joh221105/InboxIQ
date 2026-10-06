@@ -8,6 +8,10 @@ nothing urgent gets buried.
 [![CI](https://github.com/Joh221105/InboxIQ/actions/workflows/ci.yml/badge.svg)](https://github.com/Joh221105/InboxIQ/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> **Status:** InboxIQ runs locally for now; there is no hosted instance. See
+> [Getting started](#getting-started) to run it, and [Deployment](#deployment)
+> for hosting it yourself.
+
 ![InboxIQ dashboard](docs/images/dashboard.png)
 
 ## Features
@@ -42,9 +46,11 @@ flowchart LR
 ```
 
 - A scheduler syncs connected Gmail accounts every few minutes.
-- A background worker triages new mail with a context-specific prompt, using
-  OpenRouter with an Anthropic fallback. Every response is validated against a
-  schema before it is stored.
+- A background worker triages new mail with a context-specific prompt. It
+  uses OpenRouter first and falls back to Anthropic Claude Haiku, both when
+  OpenRouter is unavailable and when its answer can't be used.
+- Every response is validated against a schema before it is stored, and every
+  prompt sees at most the first 4,000 characters of an email.
 - Switching context re-triages recent mail in a background job.
 - OAuth tokens and the database service key never leave the API. Every query
   is scoped to the verified user, with Postgres row-level security as a
@@ -61,7 +67,7 @@ See [docs/architecture.md](docs/architecture.md) for the full design.
 | AI | OpenRouter (Mistral 7B, free tier) with Anthropic Claude Haiku fallback |
 | Data & auth | Supabase Postgres and Auth, row-level security |
 | Testing | pytest, respx, Vitest, Testing Library, Playwright |
-| Hosting | Vercel (frontend), Railway (backend) |
+| Hosting | Runs locally with `make dev`; set up for Vercel (frontend) and Railway (backend) |
 
 ## Getting started
 
@@ -149,6 +155,9 @@ docs/            architecture and screenshots
 ```
 
 ## Deployment
+
+InboxIQ is not deployed anywhere at the moment. The repository is set up for
+Vercel and Railway, so hosting it takes these steps:
 
 - **Vercel:** set the root directory to `frontend/` and add the three
   `NEXT_PUBLIC_*` variables.
